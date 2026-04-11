@@ -161,7 +161,7 @@ frame:SetResizable(true)
 frame:SetResizeBounds(280, 200, 700, 900)
 frame:Hide()
 
-local titleText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+local titleText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalLarge")
 titleText:SetPoint("TOPLEFT", frame, "TOPLEFT", 8, -8)
 titleText:SetText("|cff00ccffGuild Bank Restock|r")
 
