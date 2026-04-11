@@ -1,2 +1,48 @@
-# GemBuyer
-Restock gems for guild bank
+# Guild Bank Restock
+
+A World of Warcraft addon that automates buying items from the Auction House using [Auctionator](https://www.curseforge.com/wow/addons/auctionator). Designed for restocking a guild bank with gems, enchants, potions, flasks, and weapon oils/stones.
+
+## Requirements
+
+- World of Warcraft: Midnight (12.x / Retail)
+- [Auctionator](https://www.curseforge.com/wow/addons/auctionator) addon
+
+## Installation
+
+1. Download or clone this repository
+2. Copy the `GuildBankRestock` folder into your WoW AddOns directory:
+   ```
+   World of Warcraft\_retail_\Interface\AddOns\GuildBankRestock
+   ```
+3. Launch WoW and enable the addon in the AddOns menu on the character select screen
+
+## Usage
+
+1. Open the Auction House and switch to the **Auctionator Shopping** tab
+2. Type `/restock` in chat to open the Guild Bank Restock window
+3. Use the category tabs (Gems, Enchants, Potions, Flasks, Oils) to browse and select items
+4. Check the items you want to buy and set the quantity for each
+5. Click **Start** — the addon will search the AH for all selected items across all categories
+6. For each item found, click **Buy** to purchase it
+7. Repeat until all items are purchased, then the window closes automatically
+
+### Slash Commands
+
+| Command | Description |
+|---|---|
+| `/restock` | Open the Guild Bank Restock window |
+| `/restock stop` | Cancel the current run and close the window |
+| `/bankrestock` | Alias for `/restock` |
+
+## Configuration
+
+Item quantities can be set per-item directly in the UI. Use the **All** and **None** buttons to quickly enable or disable all items in the current category tab.
+
+To add or remove items, edit the relevant category in the `CATEGORIES` table at the top of `GuildBankRestock.lua`.
+
+## Notes
+
+- Only commodity-type items (stackable) are supported by the underlying AH API
+- Start searches all enabled items across all category tabs in one run
+- The addon will stop automatically if a purchase fails (e.g. insufficient gold)
+- The window is resizable and movable

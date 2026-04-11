@@ -1,7 +1,0 @@
-## Interface: 120000, 120001
-## Title: GemBuyer
-## Notes: Auto-buys gems from an Auctionator shopping list via /gemshop
-## Dependencies: Auctionator
-## Version: 1.0.0
-
-GemBuyer.lua
