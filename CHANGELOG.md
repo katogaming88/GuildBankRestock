@@ -2,6 +2,20 @@
 
 All notable changes to GuildBankRestock will be documented here.
 
+## [0.3.1] - 2026-04-13
+
+### Fixed
+- Hidden rows no longer leave empty space when filtering by rank; visible rows are repacked and the scroll area resizes to match
+
+## [0.3.0] - 2026-04-13
+
+### Added
+- Subcategory headers within the Enchants tab (Rings, Chest, Leg, Head, Shoulder, Boots)
+
+### Changed
+- R1 / R2 buttons now fully hide items of the other rank instead of just unchecking them
+- Subcategory headers are hidden automatically when all their items are filtered out
+
 ## [0.2.5] - 2026-04-13
 
 ### Changed

@@ -161,6 +161,7 @@ local COL_CB    = 2
 local COL_NAME  = 24
 local QTY_W     = 34
 local ROW_H     = 20
+local SUBCAT_H  = 18
 
 local checklistSection = CreateFrame("Frame", nil, frame)
 checklistSection:SetPoint("TOPLEFT",     tabContainer, "BOTTOMLEFT",  0, -4)
@@ -251,89 +252,116 @@ end)
 -- ============================================================
 -- Item rows  (checkbox + linked name + qty box, per category)
 -- ============================================================
-local categoryRows = {}  -- catIdx -> array of { cb, qtyBox }
+local categoryRows    = {}  -- catIdx -> array of { rowFrame/headerFrame, cb, qtyBox }
+local categoryHeights = {}  -- catIdx -> total pixel height of the group
 
 for catIdx, cat in ipairs(CATEGORIES) do
     local group = CreateFrame("Frame", nil, scrollChild)
     group:SetPoint("TOPLEFT", scrollChild, "TOPLEFT", 0, 0)
     group:SetWidth(FRAME_W - 38)
-    group:SetHeight(math.max(#cat.items * ROW_H + 4, 1))
     group:Hide()
     categoryGroups[catIdx] = group
     categoryRows[catIdx]   = {}
 
+    local yPos = 0  -- running Y offset from top of group
+
     for i, item in ipairs(cat.items) do
-        local yOff = -(i - 1) * ROW_H
+        if item.header then
+            -- Subcategory header row
+            local headerFrame = CreateFrame("Frame", nil, group)
+            headerFrame:SetPoint("TOPLEFT",  group, "TOPLEFT",  0, -yPos)
+            headerFrame:SetPoint("TOPRIGHT", group, "TOPRIGHT", 0, -yPos)
+            headerFrame:SetHeight(SUBCAT_H)
 
-        -- Checkbox
-        local cb = CreateFrame("CheckButton", nil, group)
-        cb:SetSize(18, 18)
-        cb:SetPoint("TOPLEFT", group, "TOPLEFT", COL_CB, yOff - 1)
-        cb:SetNormalTexture("Interface/Buttons/UI-CheckBox-Up")
-        cb:SetPushedTexture("Interface/Buttons/UI-CheckBox-Down")
-        cb:SetCheckedTexture("Interface/Buttons/UI-CheckBox-Check")
-        cb:SetHighlightTexture("Interface/Buttons/UI-CheckBox-Highlight", "ADD")
-        cb:SetChecked(item.enabled)
-        cb:SetScript("OnClick", function(self)
-            CATEGORIES[catIdx].items[i].enabled = self:GetChecked()
-        end)
+            local hl = headerFrame:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+            hl:SetPoint("LEFT", headerFrame, "LEFT", COL_NAME, 0)
+            hl:SetTextColor(1, 0.82, 0)
+            hl:SetText(item.header)
 
-        -- Hover zone for tooltip (stretches between checkbox and qty box)
-        local nameFrame = CreateFrame("Frame", nil, group)
-        nameFrame:SetPoint("TOPLEFT",  group, "TOPLEFT",  COL_NAME,        yOff)
-        nameFrame:SetPoint("TOPRIGHT", group, "TOPRIGHT", -(QTY_W + 8),    yOff)
-        nameFrame:SetHeight(ROW_H)
-        nameFrame:EnableMouse(true)
+            categoryRows[catIdx][i] = { headerFrame = headerFrame }
+            yPos = yPos + SUBCAT_H
+        else
+            -- Item row — wrapped in a rowFrame for easy show/hide
+            local rowFrame = CreateFrame("Frame", nil, group)
+            rowFrame:SetPoint("TOPLEFT",  group, "TOPLEFT",  0, -yPos)
+            rowFrame:SetPoint("TOPRIGHT", group, "TOPRIGHT", 0, -yPos)
+            rowFrame:SetHeight(ROW_H)
 
-        local label = nameFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-        label:SetPoint("LEFT",  nameFrame, "LEFT",  0, 0)
-        label:SetPoint("RIGHT", nameFrame, "RIGHT", 0, 0)
-        label:SetJustifyH("LEFT")
-        label:SetWordWrap(false)
-        label:SetText("item:" .. item.id)
+            -- Checkbox
+            local cb = CreateFrame("CheckButton", nil, rowFrame)
+            cb:SetSize(18, 18)
+            cb:SetPoint("TOPLEFT", rowFrame, "TOPLEFT", COL_CB, -1)
+            cb:SetNormalTexture("Interface/Buttons/UI-CheckBox-Up")
+            cb:SetPushedTexture("Interface/Buttons/UI-CheckBox-Down")
+            cb:SetCheckedTexture("Interface/Buttons/UI-CheckBox-Check")
+            cb:SetHighlightTexture("Interface/Buttons/UI-CheckBox-Highlight", "ADD")
+            cb:SetChecked(item.enabled)
+            cb:SetScript("OnClick", function(self)
+                CATEGORIES[catIdx].items[i].enabled = self:GetChecked()
+            end)
 
-        local function TryLoadLink(attempts)
-            local _, link = GetItemInfo(item.id)
-            if link then
-                label:SetText(link)
-                nameFrame.itemLink = link
-            elseif attempts < 10 then
-                C_Timer.After(0.5, function() TryLoadLink(attempts + 1) end)
+            -- Hover zone for tooltip (stretches between checkbox and qty box)
+            local nameFrame = CreateFrame("Frame", nil, rowFrame)
+            nameFrame:SetPoint("TOPLEFT",  rowFrame, "TOPLEFT",  COL_NAME,     0)
+            nameFrame:SetPoint("TOPRIGHT", rowFrame, "TOPRIGHT", -(QTY_W + 8), 0)
+            nameFrame:SetHeight(ROW_H)
+            nameFrame:EnableMouse(true)
+
+            local label = nameFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+            label:SetPoint("LEFT",  nameFrame, "LEFT",  0, 0)
+            label:SetPoint("RIGHT", nameFrame, "RIGHT", 0, 0)
+            label:SetJustifyH("LEFT")
+            label:SetWordWrap(false)
+            label:SetText("item:" .. item.id)
+
+            local function TryLoadLink(attempts)
+                local _, link = GetItemInfo(item.id)
+                if link then
+                    label:SetText(link)
+                    nameFrame.itemLink = link
+                elseif attempts < 10 then
+                    C_Timer.After(0.5, function() TryLoadLink(attempts + 1) end)
+                end
             end
+            TryLoadLink(0)
+
+            nameFrame:SetScript("OnEnter", function(self)
+                if self.itemLink then
+                    GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
+                    GameTooltip:SetHyperlink(self.itemLink)
+                    GameTooltip:Show()
+                end
+            end)
+            nameFrame:SetScript("OnLeave", function() GameTooltip:Hide() end)
+
+            -- Quantity box (right-anchored so it tracks the window edge on resize)
+            local qtyBox = CreateFrame("EditBox", nil, rowFrame, "InputBoxTemplate")
+            qtyBox:SetSize(QTY_W, 16)
+            qtyBox:SetPoint("RIGHT", rowFrame, "TOPRIGHT", -4, -ROW_H / 2)
+            qtyBox:SetNumeric(true)
+            qtyBox:SetMaxLetters(3)
+            qtyBox:SetAutoFocus(false)
+            qtyBox:SetText(tostring(item.qty))
+            qtyBox:SetScript("OnEnterPressed",  function(self) self:ClearFocus() end)
+            qtyBox:SetScript("OnEscapePressed", function(self)
+                self:SetText(tostring(CATEGORIES[catIdx].items[i].qty))
+                self:ClearFocus()
+            end)
+            qtyBox:SetScript("OnEditFocusLost", function(self)
+                local v = tonumber(self:GetText()) or 1
+                if v < 1 then v = 1 end
+                CATEGORIES[catIdx].items[i].qty = v
+                self:SetText(tostring(v))
+            end)
+
+            categoryRows[catIdx][i] = { rowFrame = rowFrame, cb = cb, qtyBox = qtyBox }
+            yPos = yPos + ROW_H
         end
-        TryLoadLink(0)
-
-        nameFrame:SetScript("OnEnter", function(self)
-            if self.itemLink then
-                GameTooltip:SetOwner(self, "ANCHOR_RIGHT")
-                GameTooltip:SetHyperlink(self.itemLink)
-                GameTooltip:Show()
-            end
-        end)
-        nameFrame:SetScript("OnLeave", function() GameTooltip:Hide() end)
-
-        -- Quantity box (right-anchored so it tracks the window edge on resize)
-        local qtyBox = CreateFrame("EditBox", nil, group, "InputBoxTemplate")
-        qtyBox:SetSize(QTY_W, 16)
-        qtyBox:SetPoint("RIGHT", group, "TOPRIGHT", -4, yOff - ROW_H / 2)
-        qtyBox:SetNumeric(true)
-        qtyBox:SetMaxLetters(3)
-        qtyBox:SetAutoFocus(false)
-        qtyBox:SetText(tostring(item.qty))
-        qtyBox:SetScript("OnEnterPressed",  function(self) self:ClearFocus() end)
-        qtyBox:SetScript("OnEscapePressed", function(self)
-            self:SetText(tostring(CATEGORIES[catIdx].items[i].qty))
-            self:ClearFocus()
-        end)
-        qtyBox:SetScript("OnEditFocusLost", function(self)
-            local v = tonumber(self:GetText()) or 1
-            if v < 1 then v = 1 end
-            CATEGORIES[catIdx].items[i].qty = v
-            self:SetText(tostring(v))
-        end)
-
-        categoryRows[catIdx][i] = { cb = cb, qtyBox = qtyBox }
     end
+
+    local totalH = math.max(yPos + 4, 1)
+    group:SetHeight(totalH)
+    categoryHeights[catIdx] = totalH
 end
 
 -- ============================================================
@@ -350,7 +378,7 @@ SelectTab = function(idx)
     categoryGroups[currentCatIdx]:Hide()
     currentCatIdx = idx
     categoryGroups[idx]:Show()
-    scrollChild:SetHeight(math.max(#CATEGORIES[idx].items * ROW_H + 4, 1))
+    scrollChild:SetHeight(categoryHeights[idx] or 1)
 end
 
 SelectTab(1)  -- initialize to first tab
@@ -360,31 +388,72 @@ SelectTab(1)  -- initialize to first tab
 -- ============================================================
 allBtn:SetScript("OnClick", function()
     for i, row in ipairs(categoryRows[currentCatIdx]) do
-        CATEGORIES[currentCatIdx].items[i].enabled = true
-        row.cb:SetChecked(true)
+        if not row.headerFrame then
+            CATEGORIES[currentCatIdx].items[i].enabled = true
+            row.cb:SetChecked(true)
+        end
     end
 end)
 
 noneBtn:SetScript("OnClick", function()
     for i, row in ipairs(categoryRows[currentCatIdx]) do
-        CATEGORIES[currentCatIdx].items[i].enabled = false
-        row.cb:SetChecked(false)
+        if not row.headerFrame then
+            CATEGORIES[currentCatIdx].items[i].enabled = false
+            row.cb:SetChecked(false)
+        end
     end
 end)
 
 -- R1 / R2 / Both  (all tabs — only affects items that have a rank field)
+-- Re-packs visible rows so hidden ones leave no empty space.
 local function ApplyRankFilter(rank)
     for catIdx, cat in ipairs(CATEGORIES) do
+        local group = categoryGroups[catIdx]
+        local yPos  = 0
+
         for i, item in ipairs(cat.items) do
-            if item.rank then
-                local enable = (rank == nil) or (item.rank == rank)
-                item.enabled = enable
-                if categoryRows[catIdx][i] then
-                    categoryRows[catIdx][i].cb:SetChecked(enable)
+            local row = categoryRows[catIdx][i]
+            if item.header then
+                -- Show header only if at least one item beneath it will be visible
+                local anyVisible = false
+                for j = i + 1, #cat.items do
+                    if cat.items[j].header then break end
+                    local jItem = cat.items[j]
+                    if not jItem.rank or (rank == nil) or (jItem.rank == rank) then
+                        anyVisible = true
+                        break
+                    end
+                end
+                if anyVisible then
+                    row.headerFrame:ClearAllPoints()
+                    row.headerFrame:SetPoint("TOPLEFT",  group, "TOPLEFT",  0, -yPos)
+                    row.headerFrame:SetPoint("TOPRIGHT", group, "TOPRIGHT", 0, -yPos)
+                    row.headerFrame:Show()
+                    yPos = yPos + SUBCAT_H
+                else
+                    row.headerFrame:Hide()
+                end
+            else
+                local show = not item.rank or (rank == nil) or (item.rank == rank)
+                item.enabled = show
+                row.cb:SetChecked(show)
+                if show then
+                    row.rowFrame:ClearAllPoints()
+                    row.rowFrame:SetPoint("TOPLEFT",  group, "TOPLEFT",  0, -yPos)
+                    row.rowFrame:SetPoint("TOPRIGHT", group, "TOPRIGHT", 0, -yPos)
+                    row.rowFrame:Show()
+                    yPos = yPos + ROW_H
+                else
+                    row.rowFrame:Hide()
                 end
             end
         end
+
+        local totalH = math.max(yPos + 4, 1)
+        group:SetHeight(totalH)
+        categoryHeights[catIdx] = totalH
     end
+    scrollChild:SetHeight(categoryHeights[currentCatIdx] or 1)
 end
 
 r1Btn:SetScript("OnClick",   function() ApplyRankFilter(1)   end)
@@ -473,7 +542,7 @@ actionBtn:SetScript("OnClick", function()
         wipe(resultRows)
         for catIdx, cat in ipairs(CATEGORIES) do
             for itemIdx, item in ipairs(cat.items) do
-                if item.enabled then
+                if item.enabled and not item.header then
                     activeItems[#activeItems + 1] = { catIdx = catIdx, itemIdx = itemIdx }
                 end
             end
