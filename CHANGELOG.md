@@ -2,6 +2,11 @@
 
 All notable changes to GuildBankRestock will be documented here.
 
+## [0.5.1] - 2026-04-13
+
+### Fixed
+- Pressing ESC during a run now stops the addon and prints "Stopped." instead of just hiding the window
+
 ## [0.5.0] - 2026-04-13
 
 ### Added

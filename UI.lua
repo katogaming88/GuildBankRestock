@@ -28,6 +28,12 @@ frame:SetResizable(true)
 frame:SetResizeBounds(280, 200, 700, 900)
 frame:Hide()
 tinsert(UISpecialFrames, "GuildBankRestockFrame")
+frame:SetScript("OnHide", function()
+    if ns.state ~= ns.STATE.IDLE then
+        ns.Reset()
+        ns.Print("Stopped.")
+    end
+end)
 
 ns.frame = frame  -- exposed for Commands.lua
 
