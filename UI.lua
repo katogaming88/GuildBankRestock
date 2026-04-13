@@ -370,9 +370,24 @@ local function ApplyRankFilter(rank)
     scrollChild:SetHeight(categoryHeights[currentCatIdx] or 1)
 end
 
-r1Btn:SetScript("OnClick",   function() ApplyRankFilter(1)   end)
-r2Btn:SetScript("OnClick",   function() ApplyRankFilter(2)   end)
-bothBtn:SetScript("OnClick", function() ApplyRankFilter(nil) end)
+local function SetRankButtonActive(rank)
+    local function Color(btn, active)
+        if active then
+            btn:GetFontString():SetTextColor(1, 0.82, 0)  -- gold
+        else
+            btn:GetFontString():SetTextColor(1, 1, 1)     -- white
+        end
+    end
+    Color(r1Btn,   rank == 1)
+    Color(r2Btn,   rank == 2)
+    Color(bothBtn, rank == nil)
+end
+
+r1Btn:SetScript("OnClick",   function() ApplyRankFilter(1);   SetRankButtonActive(1)   end)
+r2Btn:SetScript("OnClick",   function() ApplyRankFilter(2);   SetRankButtonActive(2)   end)
+bothBtn:SetScript("OnClick", function() ApplyRankFilter(nil); SetRankButtonActive(nil) end)
+
+SetRankButtonActive(nil)  -- Both is the default state
 
 -- ============================================================
 -- UpdateUI

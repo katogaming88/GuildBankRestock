@@ -2,6 +2,11 @@
 
 All notable changes to GuildBankRestock will be documented here.
 
+## [0.4.1] - 2026-04-13
+
+### Added
+- R1, R2, and Both buttons highlight in gold to show the active rank filter; defaults to Both on load
+
 ## [0.4.0] - 2026-04-13
 
 ### Changed
