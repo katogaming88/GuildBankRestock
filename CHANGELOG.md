@@ -2,6 +2,11 @@
 
 All notable changes to GuildBankRestock will be documented here.
 
+## [0.2.4] - 2026-04-13
+
+### Fixed
+- Lua error on load caused by column header referencing layout constants before they were defined
+
 ## [0.2.3] - 2026-04-13
 
 ### Added

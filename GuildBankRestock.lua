@@ -157,6 +157,10 @@ end
 -- UI – checklist section (visible only in IDLE)
 -- ============================================================
 local ALLNONE_H = 22
+local COL_CB    = 2
+local COL_NAME  = 24
+local QTY_W     = 34
+local ROW_H     = 20
 
 local checklistSection = CreateFrame("Frame", nil, frame)
 checklistSection:SetPoint("TOPLEFT",     tabContainer, "BOTTOMLEFT",  0, -4)
@@ -248,11 +252,6 @@ end)
 -- Item rows  (checkbox + linked name + qty box, per category)
 -- ============================================================
 local categoryRows = {}  -- catIdx -> array of { cb, qtyBox }
-
-local COL_CB   = 2
-local COL_NAME = 24
-local QTY_W    = 34
-local ROW_H    = 20
 
 for catIdx, cat in ipairs(CATEGORIES) do
     local group = CreateFrame("Frame", nil, scrollChild)
