@@ -155,7 +155,7 @@ local SUBCAT_H  = 18
 
 local checklistSection = CreateFrame("Frame", nil, frame)
 checklistSection:SetPoint("TOPLEFT",     tabContainer, "BOTTOMLEFT",  0, -4)
-checklistSection:SetPoint("BOTTOMRIGHT", frame,        "BOTTOMRIGHT", -8, 58)
+checklistSection:SetPoint("BOTTOMRIGHT", frame,        "BOTTOMRIGHT", -8, 76)
 
 local categoryGroups = {}  -- catIdx -> Frame
 
@@ -239,10 +239,37 @@ end
 -- Status text, action button, resize grip
 -- ============================================================
 local statusText = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
-statusText:SetPoint("BOTTOMLEFT",  frame, "BOTTOMLEFT",  8, 38)
-statusText:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -8, 38)
+statusText:SetPoint("BOTTOMLEFT",  frame, "BOTTOMLEFT",  8, 56)
+statusText:SetPoint("BOTTOMRIGHT", frame, "BOTTOMRIGHT", -8, 56)
 statusText:SetJustifyH("LEFT")
 statusText:SetText("")
+
+local budgetLabel = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+budgetLabel:SetPoint("BOTTOMLEFT", frame, "BOTTOMLEFT", 8, 38)
+budgetLabel:SetText("Budget (g):")
+
+local budgetBox = CreateFrame("EditBox", nil, frame, "InputBoxTemplate")
+budgetBox:SetSize(70, 18)
+budgetBox:SetPoint("LEFT", budgetLabel, "RIGHT", 4, 0)
+budgetBox:SetNumeric(true)
+budgetBox:SetMaxLetters(6)
+budgetBox:SetAutoFocus(false)
+budgetBox:SetText("0")
+budgetBox:SetScript("OnEnterPressed", function(self) self:ClearFocus() end)
+budgetBox:SetScript("OnEscapePressed", function(self)
+    self:SetText(tostring(ns.budget))
+    self:ClearFocus()
+end)
+budgetBox:SetScript("OnEditFocusLost", function(self)
+    local v = math.max(0, tonumber(self:GetText()) or 0)
+    self:SetText(tostring(v))
+    ns.budget = v
+    GuildBankRestockDB.budget = v
+end)
+
+local budgetHint = frame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
+budgetHint:SetPoint("LEFT", budgetBox, "RIGHT", 6, 0)
+budgetHint:SetText("|cff888888(0 = no limit)|r")
 
 local actionBtn = CreateFrame("Button", nil, frame, "UIPanelButtonTemplate")
 actionBtn:SetSize(220, 22)
@@ -719,6 +746,7 @@ ns.ApplySettingsToUI = function()
     local savedMode = (GuildBankRestockDB and GuildBankRestockDB.mode) or "bulk"
     SetMode(savedMode)
     if savedMode == "restock" then ns.RefreshProfileUI() end
+    budgetBox:SetText(tostring(GuildBankRestockDB and GuildBankRestockDB.budget or 0))
 end
 
 -- ============================================================
@@ -836,9 +864,12 @@ actionBtn:SetScript("OnClick", function()
         Auctionator.EventBus:RegisterSource(ns.listener, ADDON_NAME)
         Auctionator.EventBus:Register(ns.listener, { Auctionator.Shopping.Tab.Events.SearchEnd })
         ns.listenerRegistered = true
+        ns.budget        = math.max(0, tonumber(budgetBox:GetText()) or 0)
+        ns.runStartMoney = GetMoney()
+        GuildBankRestockDB.budget = ns.budget
         ns.state = ns.STATE.SEARCHING
         UpdateUI()
-        ns.Log("Search started: " .. #ns.activeItems .. " items.", 0.8, 0.8, 1)
+        ns.Log("Search started: " .. #ns.activeItems .. " items." .. (ns.budget > 0 and "  Budget: " .. ns.budget .. "g" or ""), 0.8, 0.8, 1)
         AuctionatorShoppingFrame:DoSearch(ns.BuildSearchStrings())
 
     elseif ns.state == ns.STATE.READY then

@@ -77,6 +77,16 @@ Example item entry:
 
 Categories that use subcategory headers (e.g. Enchants) can include `{ header = "Label" }` entries to visually group items by slot.
 
+## Budget
+
+A per-run gold limit can be set in the `Budget (g):` field above the Start button. Set it to `0` (the default) for no limit.
+
+When the budget is reached mid-run, the addon pauses and returns to the main window. It prints:
+- Total gold spent for the run (broken down to gold/silver/copper)
+- Every item that was not purchased due to the budget being hit
+
+The budget is saved between sessions so you don't need to re-enter it each time.
+
 ## Notes
 
 - Only commodity-type items (stackable) are supported by the underlying AH API

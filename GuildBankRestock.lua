@@ -26,6 +26,8 @@ ns.guildBankScanned   = false
 ns.mode               = "bulk"  -- "bulk" or "restock"
 ns.currentProfile     = nil     -- active profile name
 ns.toBuy              = {}      -- catIdx_itemIdx -> qty to buy this run (restock mode)
+ns.budget             = 0       -- gold limit per run (0 = no limit)
+ns.runStartMoney      = 0       -- copper at the start of the current run
 
 -- ============================================================
 -- Helpers
@@ -101,11 +103,12 @@ end
 -- ============================================================
 local function LoadSettings()
     if not GuildBankRestockDB then
-        GuildBankRestockDB = { items = {}, rankFilter = nil, mode = "bulk", activeProfile = nil, profiles = {} }
+        GuildBankRestockDB = { items = {}, rankFilter = nil, mode = "bulk", activeProfile = nil, profiles = {}, budget = 0 }
     end
     if not GuildBankRestockDB.profiles then GuildBankRestockDB.profiles = {} end
     ns.mode           = GuildBankRestockDB.mode or "bulk"
     ns.currentProfile = GuildBankRestockDB.activeProfile
+    ns.budget         = GuildBankRestockDB.budget or 0
     for catIdx, cat in ipairs(CATEGORIES) do
         for itemIdx, item in ipairs(cat.items) do
             if not item.header then
@@ -193,6 +196,35 @@ eventFrame:SetScript("OnEvent", function(_, event)
         ns.pendingListPos = nil
         ns.pendingItemID  = nil
         ns.pendingQty     = nil
+
+        if ns.budget > 0 then
+            local spent = ns.runStartMoney - GetMoney()
+            if spent >= ns.budget * 10000 then
+                local g = math.floor(spent / 10000)
+                local s = math.floor((spent % 10000) / 100)
+                local c = spent % 100
+                local summary = string.format("Budget reached: %dg %ds %dc spent.", g, s, c)
+                ns.Print(summary)
+                ns.Log(summary, 1, 0.82, 0)
+                local remaining = {}
+                for listPos, ref in ipairs(ns.activeItems) do
+                    if not ns.boughtIndices[listPos] then
+                        local item = CATEGORIES[ref.catIdx].items[ref.itemIdx]
+                        remaining[#remaining + 1] = C_Item.GetItemInfo(item.id) or ("item:" .. item.id)
+                    end
+                end
+                if #remaining > 0 then
+                    ns.Print("Not purchased: " .. table.concat(remaining, ", "))
+                    for _, itemName in ipairs(remaining) do
+                        ns.Log("Not purchased: " .. itemName, 1, 0.5, 0.5)
+                    end
+                end
+                ns.Reset()
+                ns.UpdateUI()
+                return
+            end
+        end
+
         ns.state = ns.STATE.READY
         ns.UpdateUI()
 

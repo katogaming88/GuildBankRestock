@@ -2,6 +2,13 @@
 
 All notable changes to GuildBankRestock will be documented here.
 
+## [0.7.1] - 2026-04-21
+
+### Added
+- Per-run gold budget: set a limit in the `Budget (g):` field above the Start button
+- When the budget is hit mid-run the addon pauses, prints how much was spent (gold/silver/copper), and lists every item that was not purchased in chat and in the Log tab
+- Budget persists between sessions; set to 0 for no limit
+
 ## [0.7.0] - 2026-04-21
 
 ### Added
