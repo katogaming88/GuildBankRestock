@@ -25,8 +25,13 @@ jobs:
             --exclude "GuildBankRestock/fetch-libs.sh" \
             --exclude "GuildBankRestock/.gitignore"
 
+      - name: Extract changelog for this tag
+        run: |
+          TAG=${GITHUB_REF_NAME}
+          awk "/^## \[$TAG\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md > release_notes.md
+
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
           files: ../GuildBankRestock.zip
-          generate_release_notes: true
+          body_path: release_notes.md
