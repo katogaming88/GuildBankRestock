@@ -25,10 +25,28 @@ jobs:
             --exclude "GuildBankRestock/fetch-libs.sh" \
             --exclude "GuildBankRestock/.gitignore"
 
-      - name: Extract changelog for this tag
+      - name: Build release notes
         run: |
           TAG=${GITHUB_REF_NAME}
-          awk "/^## \[$TAG\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md > release_notes.md
+          VERSION=${TAG#v}
+
+          # Extract date from changelog header: ## [x.y.z] - YYYY-MM-DD
+          DATE=$(grep "^## \[$VERSION\]" CHANGELOG.md | grep -oP '\d{4}-\d{2}-\d{2}' | head -1)
+
+          # Extract bullet-point body between this version header and the next
+          BODY=$(awk "/^## \[$VERSION\]/{found=1; next} found && /^## \[/{exit} found{print}" CHANGELOG.md)
+
+          REPO_URL="https://github.com/${{ github.repository }}"
+
+          cat > release_notes.md <<EOF
+          # Guild Bank Restock
+
+          ## $TAG ($DATE)
+
+          [Full Changelog]($REPO_URL/blob/main/CHANGELOG.md) [Previous Releases]($REPO_URL/releases)
+
+          $BODY
+          EOF
 
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
