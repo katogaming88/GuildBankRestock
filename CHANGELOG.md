@@ -2,6 +2,11 @@
 
 All notable changes to GuildBankRestock will be documented here.
 
+## [0.8.2] - 2026-04-23
+
+### Fixed
+- `GetAddOnMetadata` nil error on load — replaced with `C_AddOns.GetAddOnMetadata` (the old global was removed in The War Within 11.0), with a fallback for compatibility
+
 ## [0.8.1] - 2026-04-21
 
 ### Added

@@ -216,7 +216,7 @@ function GBR:HandleSlashCommand(msg)
     if cmd == "stop" then
         ns.frame.frame:Hide()
     elseif cmd == "version" or cmd == "v" then
-        local v = GetAddOnMetadata(ADDON_NAME, "Version") or "?"
+        local v = (C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata)(ADDON_NAME, "Version") or "?"
         ns.Print("Version " .. v)
     else
         ns.frame.frame:Show()

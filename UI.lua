@@ -613,7 +613,7 @@ end
 -- ============================================================
 -- Main frame  (created at file load, starts hidden)
 -- ============================================================
-local _version = GetAddOnMetadata(ADDON_NAME, "Version") or "?"
+local _version = (C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata)(ADDON_NAME, "Version") or "?"
 frame = AceGUI:Create("Frame")
 frame:SetTitle("Guild Bank Restock v" .. _version)
 frame:SetWidth(440)
