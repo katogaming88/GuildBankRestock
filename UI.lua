@@ -144,11 +144,16 @@ BuildCategoryContent = function(catIdx)
     local cat = CATEGORIES[catIdx]
     if not cat then return end
 
-    -- Helper: add a standard button to a parent widget
+    -- Helper: add a standard button to a parent widget.
+    -- Pass width=nil to auto-size to the label text.
     local function AddBtn(parent, text, width, onClick)
         local btn = AceGUI:Create("Button")
         btn:SetText(text)
-        btn:SetWidth(width)
+        if width then
+            btn:SetWidth(width)
+        else
+            btn:SetAutoWidth(true)
+        end
         btn:SetCallback("OnClick", onClick)
         parent:AddChild(btn)
         return btn
@@ -168,13 +173,13 @@ BuildCategoryContent = function(catIdx)
     modeRow:SetLayout("Flow")
     modeRow:SetFullWidth(true)
 
-    AddBtn(modeRow, ModeLabel("Bulk", "bulk"), 60, function()
+    AddBtn(modeRow, ModeLabel("Bulk", "bulk"), nil, function()
         ns.mode = "bulk"
         ns.addon.db.global.mode = "bulk"
         BuildCategoryContent(catIdx)
     end)
 
-    AddBtn(modeRow, ModeLabel("Restock", "restock"), 70, function()
+    AddBtn(modeRow, ModeLabel("Restock", "restock"), nil, function()
         ns.mode = "restock"
         ns.addon.db.global.mode = "restock"
         ns.RecalculateToBuy()
@@ -263,7 +268,7 @@ BuildCategoryContent = function(catIdx)
     btnBar:SetLayout("Flow")
     btnBar:SetFullWidth(true)
 
-    AddBtn(btnBar, "Select All", 80, function()
+    AddBtn(btnBar, "Select All", nil, function()
         for i2, item2 in ipairs(cat.items) do
             if not item2.header then
                 item2.enabled = true
@@ -273,7 +278,7 @@ BuildCategoryContent = function(catIdx)
         BuildCategoryContent(catIdx)
     end)
 
-    AddBtn(btnBar, "Select None", 88, function()
+    AddBtn(btnBar, "Select None", nil, function()
         for i2, item2 in ipairs(cat.items) do
             if not item2.header then
                 item2.enabled = false
@@ -283,19 +288,19 @@ BuildCategoryContent = function(catIdx)
         BuildCategoryContent(catIdx)
     end)
 
-    AddBtn(btnBar, RankLabel("Rank 1", 1), 70, function()
+    AddBtn(btnBar, RankLabel("Rank 1", 1), nil, function()
         currentRankFilter = 1
         ns.SaveRankFilter(1)
         BuildCategoryContent(catIdx)
     end)
 
-    AddBtn(btnBar, RankLabel("Rank 2", 2), 70, function()
+    AddBtn(btnBar, RankLabel("Rank 2", 2), nil, function()
         currentRankFilter = 2
         ns.SaveRankFilter(2)
         BuildCategoryContent(catIdx)
     end)
 
-    AddBtn(btnBar, RankLabel("All Ranks", nil), 80, function()
+    AddBtn(btnBar, RankLabel("All Ranks", nil), nil, function()
         currentRankFilter = nil
         ns.SaveRankFilter(nil)
         BuildCategoryContent(catIdx)
@@ -326,7 +331,7 @@ BuildCategoryContent = function(catIdx)
     end)
     searchBar:AddChild(budgetBox)
 
-    AddBtn(searchBar, "Start Search", 100, StartSearch)
+    AddBtn(searchBar, "Start Search", nil, StartSearch)
 
     tabGroup:AddChild(searchBar)
 
@@ -622,9 +627,13 @@ end
 local _version = (C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata)(ADDON_NAME, "Version") or "?"
 frame = AceGUI:Create("Frame")
 frame:SetTitle("Guild Bank Restock v" .. _version)
-frame:SetWidth(440)
+frame:SetWidth(1000)
 frame:SetHeight(560)
 frame:SetLayout("Fill")
+
+-- Register with UISpecialFrames so ESC closes the window
+_G["GuildBankRestockMainFrame"] = frame.frame
+tinsert(UISpecialFrames, "GuildBankRestockMainFrame")
 
 -- HookScript so frame.frame:Hide() from ANY path (ESC, X, /rs stop) fires reset
 frame.frame:HookScript("OnHide", function()

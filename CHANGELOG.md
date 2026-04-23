@@ -2,6 +2,15 @@
 
 All notable changes to GuildBankRestock will be documented here.
 
+## [0.8.4] - 2026-04-23
+
+### Fixed
+- ESC now closes the window again — the Ace3 migration left the frame anonymous, so it was never registered with `UISpecialFrames`; fixed by giving the inner frame a global name and inserting it
+- Ring enchant rank data corrected: all 5 ring enchants were mislabeled `rank = 2`; added the missing R2 entries and corrected R1/R2 assignment — lower ID = R1, higher ID = R2, consistent with every other enchant slot
+
+### Changed
+- Default window width increased from 440 to 1000
+
 ## [0.8.3] - 2026-04-23
 
 ### Changed

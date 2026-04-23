@@ -5,16 +5,21 @@ table.insert(ns.CATEGORIES, {
     items = {
         -- Rings
         { header = "Rings" },
+        { id = 243956, rank = 1, qty = 1, enabled = true }, -- Enchant Ring - Eyes of the Eagle R1
         { id = 243957, rank = 2, qty = 1, enabled = true }, -- Enchant Ring - Eyes of the Eagle R2
+        { id = 243986, rank = 1, qty = 1, enabled = true }, -- Enchant Ring - Nature's Fury R1
         { id = 243987, rank = 2, qty = 1, enabled = true }, -- Enchant Ring - Nature's Fury R2
+        { id = 244014, rank = 1, qty = 1, enabled = true }, -- Enchant Ring - Silvermoon's Alacrity R1
         { id = 244015, rank = 2, qty = 1, enabled = true }, -- Enchant Ring - Silvermoon's Alacrity R2
+        { id = 244016, rank = 1, qty = 1, enabled = true }, -- Enchant Ring - Silvermoon's Tenacity R1
         { id = 244017, rank = 2, qty = 1, enabled = true }, -- Enchant Ring - Silvermoon's Tenacity R2
+        { id = 243958, rank = 1, qty = 1, enabled = true }, -- Enchant Ring - Zul'jin's Mastery R1
         { id = 243959, rank = 2, qty = 1, enabled = true }, -- Enchant Ring - Zul'jin's Mastery R2
 
         -- Chest
         { header = "Chest" },
-        { id = 243977, rank = 1, qty = 1, enabled = true }, -- Enchant Chest - Mark of the Worldsoul R1
-        { id = 243976, rank = 2, qty = 1, enabled = true }, -- Enchant Chest - Mark of the Worldsoul R2
+        { id = 243976, rank = 1, qty = 1, enabled = true }, -- Enchant Chest - Mark of the Worldsoul R1
+        { id = 243977, rank = 2, qty = 1, enabled = true }, -- Enchant Chest - Mark of the Worldsoul R2
         { id = 244002, rank = 1, qty = 1, enabled = true }, -- Enchant Chest - Mark of the Magister R1
         { id = 244003, rank = 2, qty = 1, enabled = true }, -- Enchant Chest - Mark of the Magister R2
         { id = 243946, rank = 1, qty = 1, enabled = true }, -- Enchant Chest - Mark of Nalorakk R1
