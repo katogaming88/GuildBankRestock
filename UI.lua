@@ -258,12 +258,12 @@ BuildCategoryContent = function(catIdx)
 
     tabGroup:AddChild(headerRow)
 
-    -- ── Button bar: All / None / R1 / R2 / Both / Budget / Start ──
+    -- ── Button bar row 1: Select All / None / Rank filters ──
     local btnBar = AceGUI:Create("SimpleGroup")
     btnBar:SetLayout("Flow")
     btnBar:SetFullWidth(true)
 
-    AddBtn(btnBar, "All", 40, function()
+    AddBtn(btnBar, "Select All", 80, function()
         for i2, item2 in ipairs(cat.items) do
             if not item2.header then
                 item2.enabled = true
@@ -273,7 +273,7 @@ BuildCategoryContent = function(catIdx)
         BuildCategoryContent(catIdx)
     end)
 
-    AddBtn(btnBar, "None", 48, function()
+    AddBtn(btnBar, "Select None", 88, function()
         for i2, item2 in ipairs(cat.items) do
             if not item2.header then
                 item2.enabled = false
@@ -283,32 +283,38 @@ BuildCategoryContent = function(catIdx)
         BuildCategoryContent(catIdx)
     end)
 
-    AddBtn(btnBar, RankLabel("R1", 1), 34, function()
+    AddBtn(btnBar, RankLabel("Rank 1", 1), 70, function()
         currentRankFilter = 1
         ns.SaveRankFilter(1)
         BuildCategoryContent(catIdx)
     end)
 
-    AddBtn(btnBar, RankLabel("R2", 2), 34, function()
+    AddBtn(btnBar, RankLabel("Rank 2", 2), 70, function()
         currentRankFilter = 2
         ns.SaveRankFilter(2)
         BuildCategoryContent(catIdx)
     end)
 
-    AddBtn(btnBar, RankLabel("Both", nil), 44, function()
+    AddBtn(btnBar, RankLabel("All Ranks", nil), 80, function()
         currentRankFilter = nil
         ns.SaveRankFilter(nil)
         BuildCategoryContent(catIdx)
     end)
 
-    -- Budget: inline label + editbox + Start button
+    tabGroup:AddChild(btnBar)
+
+    -- ── Button bar row 2: Budget + Start ──
+    local searchBar = AceGUI:Create("SimpleGroup")
+    searchBar:SetLayout("Flow")
+    searchBar:SetFullWidth(true)
+
     local budgetLabel = AceGUI:Create("Label")
     budgetLabel:SetText(" Budget:")
     budgetLabel:SetWidth(54)
-    btnBar:AddChild(budgetLabel)
+    searchBar:AddChild(budgetLabel)
 
     local budgetBox = AceGUI:Create("EditBox")
-    budgetBox:SetWidth(46)
+    budgetBox:SetWidth(60)
     budgetBox:SetLabel("")
     budgetBox:SetText(tostring(ns.budget))
     budgetBox:DisableButton(true)
@@ -318,11 +324,11 @@ BuildCategoryContent = function(catIdx)
         ns.budget = v
         ns.addon.db.global.budget = v
     end)
-    btnBar:AddChild(budgetBox)
+    searchBar:AddChild(budgetBox)
 
-    AddBtn(btnBar, "Start", 52, StartSearch)
+    AddBtn(searchBar, "Start Search", 100, StartSearch)
 
-    tabGroup:AddChild(btnBar)
+    tabGroup:AddChild(searchBar)
 
     -- ── Scrollable item list (fills remaining height) ─────────
     local scroll = AceGUI:Create("ScrollFrame")

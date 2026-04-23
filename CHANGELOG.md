@@ -2,6 +2,14 @@
 
 All notable changes to GuildBankRestock will be documented here.
 
+## [0.8.3] - 2026-04-23
+
+### Changed
+- Button bar split into two rows to eliminate cramped layout and truncated labels
+- "All" / "None" renamed to **Select All** / **Select None** with wider buttons
+- "R1" / "R2" / "Both" renamed to **Rank 1** / **Rank 2** / **All Ranks** with wider buttons
+- "Start" renamed to **Start Search** and given more width; budget editbox widened
+
 ## [0.8.2] - 2026-04-23
 
 ### Fixed
