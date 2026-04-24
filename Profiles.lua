@@ -56,6 +56,17 @@ function ns.SetProfileTarget(catIdx, itemIdx, qty)
     db().profiles[ns.currentProfile][catIdx .. "_" .. itemIdx] = qty > 0 and qty or nil
 end
 
+function ns.SaveProfileAs(newName)
+    if not newName or newName == "" then return end
+    if not db().profiles then db().profiles = {} end
+    local currentData = (ns.currentProfile and db().profiles[ns.currentProfile]) or {}
+    db().profiles[newName] = {}
+    for k, v in pairs(currentData) do
+        db().profiles[newName][k] = v
+    end
+    ns.SetActiveProfile(newName)
+end
+
 function ns.RecalculateToBuy()
     wipe(ns.toBuy)
     if ns.mode ~= "restock" or not ns.currentProfile then return end

@@ -2,6 +2,17 @@
 
 All notable changes to GuildBankRestock will be documented here.
 
+## [0.8.8] - 2026-04-24
+
+### Added
+- TSM integration: each item row now shows a **Mkt Price** column (TSM DBMarket) and an **Est g** column (market price × quantity to buy); a right-aligned **Est Run** total in the search bar sums estimated cost across all enabled items — both are display-only and fall back gracefully when TSM is not loaded
+- **Save As** button on the profile bar: copies the active profile to a new name and switches to it, replacing the delete-and-recreate workflow
+- Keyboard navigation for edit-box fields: Tab / Shift-Tab move linearly, Left / Right move within a row, Up / Down move by column across rows
+
+### Changed
+- Column widths tightened to fit the two new price columns without horizontal overflow
+- Editing a quantity, Target, or To Buy value now rebuilds the tab immediately so Mkt Price and Est g reflect the new quantity in place
+
 ## [0.8.7] - 2026-04-24
 
 ### Added

@@ -86,6 +86,33 @@ StaticPopupDialogs["GUILDBANKRESTOCK_NEW_PROFILE"] = {
 }
 
 -- ============================================================
+-- Static popup for save-as profile
+-- ============================================================
+StaticPopupDialogs["GUILDBANKRESTOCK_SAVE_PROFILE"] = {
+    text = "Save profile as:",
+    button1 = "Save",
+    button2 = "Cancel",
+    hasEditBox = true,
+    OnShow = function(self)
+        self.EditBox:SetText(ns.currentProfile or "")
+        self.EditBox:HighlightText()
+    end,
+    OnAccept = function(self)
+        local name = self.EditBox:GetText():match("^%s*(.-)%s*$")
+        if name ~= "" then ns.SaveProfileAs(name) end
+    end,
+    EditBoxOnEnterPressed = function(self)
+        local name = self:GetText():match("^%s*(.-)%s*$")
+        if name ~= "" then ns.SaveProfileAs(name) end
+        self:GetParent():Hide()
+    end,
+    timeout = 0,
+    whileDead = true,
+    hideOnEscape = true,
+    preferredIndex = 3,
+}
+
+-- ============================================================
 -- Start search
 -- ============================================================
 StartSearch = function()
@@ -152,6 +179,29 @@ StartSearch = function()
     ns.Log("Search started: " .. #ns.activeItems .. " items." ..
         (ns.budget > 0 and ("  Budget: " .. ns.budget .. "g") or ""), 0.8, 0.8, 1)
     AuctionatorShoppingFrame:DoSearch(ns.BuildSearchStrings())
+end
+
+-- ============================================================
+-- TSM price helpers
+-- ============================================================
+local function GetTSMPrice(itemID)
+    if not TSM_API then return nil end
+    local itemString = "i:" .. itemID
+    local ok, price = pcall(TSM_API.GetCustomPriceValue, "DBMarket", itemString)
+    if ok and type(price) == "number" and price > 0 then
+        return price  -- copper
+    end
+    return nil
+end
+
+local function FormatGold(copper)
+    if not copper or copper <= 0 then return "—" end
+    local gold = copper / 10000
+    if gold >= 100 then
+        return string.format("%dg", math.floor(gold + 0.5))
+    else
+        return string.format("%.1fg", gold)
+    end
 end
 
 -- ============================================================
@@ -246,6 +296,10 @@ BuildCategoryContent = function(catIdx)
         end)
         delBtn:SetDisabled(not ns.currentProfile)
 
+        AddBtn(profileRow, "Save", nil, function()
+            StaticPopup_Show("GUILDBANKRESTOCK_SAVE_PROFILE")
+        end)
+
         tabGroup:AddChild(profileRow)
     end
 
@@ -256,34 +310,46 @@ BuildCategoryContent = function(catIdx)
 
     local itemHeader = AceGUI:Create("Label")
     itemHeader:SetText("|cffffd100Item|r")
-    itemHeader:SetRelativeWidth(ns.mode == "restock" and 0.40 or 0.55)
+    itemHeader:SetRelativeWidth(ns.mode == "restock" and 0.27 or 0.38)
     headerRow:AddChild(itemHeader)
 
     if ns.mode == "restock" then
         local th = AceGUI:Create("Label")
         th:SetText("|cffffd100Target|r")
-        th:SetRelativeWidth(0.11)
+        th:SetRelativeWidth(0.07)
         headerRow:AddChild(th)
 
         local ibh = AceGUI:Create("Label")
         ibh:SetText("|cffffd100In Bank|r")
-        ibh:SetRelativeWidth(0.11)
+        ibh:SetRelativeWidth(0.07)
         headerRow:AddChild(ibh)
 
         local bh = AceGUI:Create("Label")
         bh:SetText("|cffffd100To Buy|r")
-        bh:SetRelativeWidth(0.11)
+        bh:SetRelativeWidth(0.07)
         headerRow:AddChild(bh)
     else
         local qh = AceGUI:Create("Label")
         qh:SetText("|cffffd100Qty|r")
-        qh:SetRelativeWidth(0.20)
+        qh:SetRelativeWidth(0.10)
         headerRow:AddChild(qh)
     end
 
+    local mkth = AceGUI:Create("Label")
+    mkth:SetText("|cffffd100Mkt Price|r")
+    mkth:SetRelativeWidth(0.13)
+    mkth.label:SetJustifyH("CENTER")
+    headerRow:AddChild(mkth)
+
+    local esth = AceGUI:Create("Label")
+    esth:SetText("|cffffd100Est g|r")
+    esth:SetRelativeWidth(0.12)
+    esth.label:SetJustifyH("CENTER")
+    headerRow:AddChild(esth)
+
     local mgh = AceGUI:Create("Label")
     mgh:SetText("|cffffd100Max g|r")
-    mgh:SetRelativeWidth(0.17)
+    mgh:SetRelativeWidth(0.12)
     headerRow:AddChild(mgh)
 
     -- ── Button bar row 1: Select All / None / Rank filters ──
@@ -331,14 +397,42 @@ BuildCategoryContent = function(catIdx)
 
     tabGroup:AddChild(btnBar)
 
-    -- ── Button bar row 2: Budget + Start ──
+    -- ── Estimated total across all categories for this run ──
+    local runEstTotal = 0
+    for ci, ccat in ipairs(CATEGORIES) do
+        for ii, citem in ipairs(ccat.items) do
+            if not citem.header and citem.enabled then
+                local price = GetTSMPrice(citem.id)
+                if price then
+                    local qty = ns.mode == "restock"
+                        and math.max(0, ns.toBuy[ci .. "_" .. ii] or 0)
+                        or (citem.qty or 1)
+                    runEstTotal = runEstTotal + price * qty
+                end
+            end
+        end
+    end
+
+    -- ── Button bar row 2: right-aligned Est Run / Budget / Start Search ──
     local searchBar = AceGUI:Create("SimpleGroup")
     searchBar:SetLayout("Flow")
     searchBar:SetFullWidth(true)
 
+    local spacer = AceGUI:Create("Label")
+    spacer:SetRelativeWidth(0.5)
+    spacer:SetText("")
+    searchBar:AddChild(spacer)
+
+    local runTotalLabel = AceGUI:Create("Label")
+    runTotalLabel:SetText(TSM_API
+        and ("|cffffd100Est Run:|r " .. FormatGold(runEstTotal))
+        or "|cff888888Est Run: (no TSM)|r")
+    runTotalLabel:SetWidth(150)
+    searchBar:AddChild(runTotalLabel)
+
     local budgetLabel = AceGUI:Create("Label")
-    budgetLabel:SetText(" Budget:")
-    budgetLabel:SetWidth(54)
+    budgetLabel:SetText("Budget:")
+    budgetLabel:SetWidth(50)
     searchBar:AddChild(budgetLabel)
 
     local budgetBox = AceGUI:Create("EditBox")
@@ -368,6 +462,7 @@ BuildCategoryContent = function(catIdx)
     -- List layout only sets TOPLEFT; add BOTTOMRIGHT so the scroll fills remaining height
     scroll.frame:SetPoint("BOTTOMRIGHT", tabGroup.content, "BOTTOMRIGHT", 0, 0)
 
+    local editBoxes = {}
     for i, item in ipairs(cat.items) do
         if item.header then
             -- Only show header if at least one item below it passes the rank filter
@@ -393,7 +488,7 @@ BuildCategoryContent = function(catIdx)
             rowGroup:SetFullWidth(true)
 
             local cb = AceGUI:Create("CheckBox")
-            cb:SetRelativeWidth(ns.mode == "restock" and 0.40 or 0.55)
+            cb:SetRelativeWidth(ns.mode == "restock" and 0.27 or 0.38)
             cb:SetValue(item.enabled)
             cb:SetLabel("item:" .. item.id)
 
@@ -424,14 +519,14 @@ BuildCategoryContent = function(catIdx)
 
             if ns.mode == "restock" then
                 local targetBox = AceGUI:Create("EditBox")
-                targetBox:SetRelativeWidth(0.11)
+                targetBox:SetRelativeWidth(0.07)
                 targetBox:SetLabel("")
                 targetBox:SetText(tostring(ns.GetProfileTarget(catIdx, i)))
                 targetBox:DisableButton(true)
                 targetBox:SetMaxLetters(3)
 
                 local inBankBox = AceGUI:Create("EditBox")
-                inBankBox:SetRelativeWidth(0.11)
+                inBankBox:SetRelativeWidth(0.07)
                 inBankBox:SetLabel("")
                 inBankBox:SetText(tostring(ns.guildBankScanned and (ns.guildBankStock[item.id] or 0) or 0))
                 inBankBox:DisableButton(true)
@@ -439,7 +534,7 @@ BuildCategoryContent = function(catIdx)
                 inBankBox:SetDisabled(true)
 
                 local toBuyBox = AceGUI:Create("EditBox")
-                toBuyBox:SetRelativeWidth(0.11)
+                toBuyBox:SetRelativeWidth(0.07)
                 toBuyBox:SetLabel("")
                 toBuyBox:SetText(tostring(ns.toBuy[catIdx .. "_" .. i] or 0))
                 toBuyBox:DisableButton(true)
@@ -465,16 +560,18 @@ BuildCategoryContent = function(catIdx)
 
                 toBuyBox:SetCallback("OnEnterPressed", function(_, _, text)
                     local v = math.max(0, tonumber(text) or 0)
-                    toBuyBox:SetText(tostring(v))
                     ns.toBuy[catIdx .. "_" .. i] = v
+                    BuildCategoryContent(catIdx)
                 end)
 
                 rowGroup:AddChild(targetBox)
                 rowGroup:AddChild(inBankBox)
                 rowGroup:AddChild(toBuyBox)
+                editBoxes[#editBoxes + 1] = targetBox.editbox
+                editBoxes[#editBoxes + 1] = toBuyBox.editbox
             else
                 local qty = AceGUI:Create("EditBox")
-                qty:SetRelativeWidth(0.20)
+                qty:SetRelativeWidth(0.10)
                 qty:SetLabel("")
                 qty:SetText(tostring(item.qty))
                 qty:SetMaxLetters(3)
@@ -483,14 +580,31 @@ BuildCategoryContent = function(catIdx)
                     local v = tonumber(text) or 1
                     if v < 1 then v = 1 end
                     item.qty = v
-                    qty:SetText(tostring(v))
                     ns.SaveItem(catIdx, i)
+                    BuildCategoryContent(catIdx)
                 end)
                 rowGroup:AddChild(qty)
+                editBoxes[#editBoxes + 1] = qty.editbox
             end
 
+            -- TSM market price and estimated cost for this item
+            local tsmPrice = GetTSMPrice(item.id)
+            local buyQty = ns.mode == "restock" and (ns.toBuy[catIdx .. "_" .. i] or 0) or (item.qty or 1)
+
+            local mktLabel = AceGUI:Create("Label")
+            mktLabel:SetRelativeWidth(0.13)
+            mktLabel:SetText(FormatGold(tsmPrice))
+            mktLabel.label:SetJustifyH("CENTER")
+            rowGroup:AddChild(mktLabel)
+
+            local estLabel = AceGUI:Create("Label")
+            estLabel:SetRelativeWidth(0.12)
+            estLabel:SetText(tsmPrice and FormatGold(tsmPrice * buyQty) or "—")
+            estLabel.label:SetJustifyH("CENTER")
+            rowGroup:AddChild(estLabel)
+
             local maxPriceBox = AceGUI:Create("EditBox")
-            maxPriceBox:SetRelativeWidth(ns.mode == "restock" and 0.17 or 0.18)
+            maxPriceBox:SetRelativeWidth(0.12)
             maxPriceBox:SetLabel("")
             maxPriceBox:SetText(item.maxPrice and item.maxPrice > 0 and tostring(item.maxPrice) or "")
             maxPriceBox:SetMaxLetters(6)
@@ -503,9 +617,45 @@ BuildCategoryContent = function(catIdx)
                 ns.SaveItem(catIdx, i)
             end)
             rowGroup:AddChild(maxPriceBox)
+            editBoxes[#editBoxes + 1] = maxPriceBox.editbox
 
             scroll:AddChild(rowGroup)
         end
+    end
+
+    -- ── Keyboard navigation ────────────────────────────────────
+    -- editBoxes is row-major: restock has 3 cols (target,toBuy,maxPrice),
+    -- bulk has 2 cols (qty,maxPrice). UP/DOWN move by column; LEFT/RIGHT
+    -- move within the row; TAB/Shift-TAB move linearly.
+    local colsPerRow = ns.mode == "restock" and 3 or 2
+    for idx, eb in ipairs(editBoxes) do
+        eb:SetScript("OnKeyDown", function(self, key)
+            local col = (idx - 1) % colsPerRow  -- 0-based column index
+            local dest
+            if key == "TAB" then
+                self:SetPropagateKeyboardInput(false)
+                dest = IsShiftKeyDown() and (editBoxes[idx - 1] or editBoxes[#editBoxes])
+                                        or  (editBoxes[idx + 1] or editBoxes[1])
+            elseif key == "RIGHT" then
+                self:SetPropagateKeyboardInput(false)
+                if col < colsPerRow - 1 then dest = editBoxes[idx + 1] end
+            elseif key == "LEFT" then
+                self:SetPropagateKeyboardInput(false)
+                if col > 0 then dest = editBoxes[idx - 1] end
+            elseif key == "DOWN" then
+                self:SetPropagateKeyboardInput(false)
+                -- next row same column; wrap to first row
+                dest = editBoxes[idx + colsPerRow] or editBoxes[col + 1]
+            elseif key == "UP" then
+                self:SetPropagateKeyboardInput(false)
+                -- prev row same column; wrap to last row
+                dest = editBoxes[idx - colsPerRow] or editBoxes[#editBoxes - (colsPerRow - 1 - col)]
+            else
+                self:SetPropagateKeyboardInput(true)
+                return
+            end
+            if dest then dest:SetFocus(); dest:HighlightText() end
+        end)
     end
 end
 
