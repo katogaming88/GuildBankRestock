@@ -23,6 +23,7 @@ local defaults = {
         profiles      = {},
         budget        = 0,
         log           = {},
+        minimapAngle  = nil,
     },
 }
 
@@ -204,6 +205,7 @@ function GBR:OnInitialize()
     LoadSettings()
     if ns.ApplySettingsToUI then ns.ApplySettingsToUI() end
     if ns.RecalculateToBuy then ns.RecalculateToBuy() end
+    if ns.InitMinimapButton then ns.InitMinimapButton() end
 
     -- Load persisted log and replay into the ScrollingMessageFrame
     ns.log = self.db.global.log

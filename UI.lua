@@ -11,14 +11,16 @@ local logFrame             -- raw ScrollingMessageFrame
 local logScrollbar         -- Slider frame for log scrolling
 local logExportBtn         -- Button frame for log export
 local logScrollbarUpdating = false
-local currentCatIdx    = 1
-local currentRankFilter    = nil
-local suppressStopMessage  = false
+local currentCatIdx       = 1
+local currentRankFilter   = nil
+local suppressStopMessage = false
 
-local LOG_TAB = #CATEGORIES + 1
+local _version  = (C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata)(ADDON_NAME, "Version") or "?"
+local ABOUT_TAB = #CATEGORIES + 1
+local LOG_TAB   = #CATEGORIES + 2
 
 -- Forward declarations
-local BuildCategoryContent, BuildLogContent
+local BuildCategoryContent, BuildLogContent, BuildAboutContent
 local ShowTabView, ShowStatusView, UpdateUI, StartSearch
 
 -- ============================================================
@@ -756,6 +758,87 @@ BuildLogContent = function()
 end
 
 -- ============================================================
+-- About tab content
+-- ============================================================
+BuildAboutContent = function()
+    tabGroup:ReleaseChildren()
+    DetachLogFrame()
+
+    local scroll = AceGUI:Create("ScrollFrame")
+    scroll:SetLayout("List")
+    scroll:SetFullWidth(true)
+    scroll:SetFullHeight(true)
+    tabGroup:AddChild(scroll)
+
+    local function Heading(text)
+        local lbl = AceGUI:Create("Label")
+        lbl:SetText("|cffffd700" .. text .. "|r")
+        lbl:SetFontObject(GameFontNormalLarge)
+        lbl:SetFullWidth(true)
+        scroll:AddChild(lbl)
+    end
+
+    local function Body(text)
+        local lbl = AceGUI:Create("Label")
+        lbl:SetText(text)
+        lbl:SetFullWidth(true)
+        scroll:AddChild(lbl)
+    end
+
+    local function Spacer()
+        local lbl = AceGUI:Create("Label")
+        lbl:SetText(" ")
+        lbl:SetFullWidth(true)
+        scroll:AddChild(lbl)
+    end
+
+    Body("|cffffd700Guild Bank Restock|r  |cffaaaaaa" .. _version .. "|r\n")
+    Body("Automates restocking your guild bank with raid consumables purchased from the Auction House via Auctionator. Set your item quantities once — the addon handles searching and buying for you.")
+
+    Spacer()
+    Heading("Who Is It For?")
+    Body("Guild bank officers and managers responsible for raid supply. Instead of manually browsing the AH for dozens of items, check what you need and let the addon handle the shopping.")
+
+    Spacer()
+    Heading("Features")
+    Body(
+        "|cffaaaaaa•|r  Categories: Gems, Enchants, Potions, Flasks, Oils\n" ..
+        "|cffaaaaaa•|r  Per-item quantity targets with optional max-price caps\n" ..
+        "|cffaaaaaa•|r  Bulk Mode — buy a fixed quantity of each selected item\n" ..
+        "|cffaaaaaa•|r  Restock Mode — scan the guild bank first, only buy what's missing\n" ..
+        "|cffaaaaaa•|r  Budget cap to limit total spend per session\n" ..
+        "|cffaaaaaa•|r  Named profiles for different raid comps or roles\n" ..
+        "|cffaaaaaa•|r  Persistent activity log with export\n" ..
+        "|cffaaaaaa•|r  Minimap button for quick access"
+    )
+
+    Spacer()
+    Heading("Getting Started")
+    Body(
+        "1. Open the addon with |cffaaaaaa/rs|r or click the minimap button\n" ..
+        "2. Check the items you want and set quantities\n" ..
+        "3. Open the Auction House, then click |cffffd700Start|r\n" ..
+        "4. In Restock mode: scan your guild bank first so the addon only buys what's short"
+    )
+
+    Spacer()
+    Heading("Slash Commands")
+    Body(
+        "|cffaaaaaa/restock|r  or  |cffaaaaaa/rs|r — Open the window\n" ..
+        "|cffaaaaaa/restock stop|r — Close the window\n" ..
+        "|cffaaaaaa/restock version|r — Print the current version"
+    )
+
+    Spacer()
+    Heading("Requirements")
+    Body("|cffffd700Auctionator|r must be installed and enabled.")
+
+    Spacer()
+    Heading("Author")
+    Body("Made by |cffffd700Katorri|r")
+end
+
+-- ============================================================
 -- Show the tab view  (IDLE state)
 -- ============================================================
 ShowTabView = function()
@@ -766,6 +849,7 @@ ShowTabView = function()
     for i, cat in ipairs(CATEGORIES) do
         tabs[#tabs + 1] = { value = tostring(i), text = cat.name }
     end
+    tabs[#tabs + 1] = { value = "about", text = "About" }
     tabs[#tabs + 1] = { value = "log", text = "Log" }
 
     tabGroup = AceGUI:Create("TabGroup")
@@ -776,6 +860,9 @@ ShowTabView = function()
         if group == "log" then
             currentCatIdx = LOG_TAB
             BuildLogContent()
+        elseif group == "about" then
+            currentCatIdx = ABOUT_TAB
+            BuildAboutContent()
         else
             currentCatIdx = tonumber(group) or 1
             BuildCategoryContent(currentCatIdx)
@@ -795,7 +882,9 @@ ShowTabView = function()
 
     frame:AddChild(tabGroup)
 
-    local tabVal = currentCatIdx == LOG_TAB and "log" or tostring(currentCatIdx)
+    local tabVal = currentCatIdx == LOG_TAB and "log"
+        or currentCatIdx == ABOUT_TAB and "about"
+        or tostring(currentCatIdx)
     tabGroup:SelectTab(tabVal)
 end
 
@@ -899,13 +988,13 @@ ns.UpdateUI = UpdateUI
 -- Callbacks for Profiles.lua  (rebuild current tab from state)
 -- ============================================================
 ns.RefreshToBuyUI = function()
-    if ns.state == ns.STATE.IDLE and currentCatIdx ~= LOG_TAB and tabGroup then
+    if ns.state == ns.STATE.IDLE and currentCatIdx ~= LOG_TAB and currentCatIdx ~= ABOUT_TAB and tabGroup then
         BuildCategoryContent(currentCatIdx)
     end
 end
 
 ns.RefreshProfileUI = function()
-    if ns.state == ns.STATE.IDLE and currentCatIdx ~= LOG_TAB then
+    if ns.state == ns.STATE.IDLE and currentCatIdx ~= LOG_TAB and currentCatIdx ~= ABOUT_TAB then
         BuildCategoryContent(currentCatIdx)
     end
 end
@@ -913,7 +1002,6 @@ end
 -- ============================================================
 -- Main frame  (created at file load, starts hidden)
 -- ============================================================
-local _version = (C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata)(ADDON_NAME, "Version") or "?"
 frame = AceGUI:Create("Frame")
 frame:SetTitle("Guild Bank Restock v" .. _version)
 frame:SetWidth(1000)

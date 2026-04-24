@@ -2,6 +2,12 @@
 
 All notable changes to GuildBankRestock will be documented here.
 
+## [0.8.10] - 2026-04-24
+
+### Added
+- **About tab**: new tab with addon description, feature list, getting started guide, slash commands, requirements, and author credit
+- Minimap button position (drag angle) now persists across sessions via SavedVariables
+
 ## [0.8.9] - 2026-04-24
 
 ### Changed
