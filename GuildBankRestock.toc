@@ -3,7 +3,7 @@
 ## Notes: Restocks guild bank items from the AH via Auctionator. Use /restock to open.
 ## Dependencies: Auctionator
 ## OptionalDeps: Ace3
-## Version: 0.8.8
+## Version: 0.8.9
 ## SavedVariables: GuildBankRestockDB
 
 # Libraries
@@ -27,3 +27,4 @@ GuildBankRestock.lua
 Profiles.lua
 GuildBank.lua
 UI.lua
+MinimapButton.lua

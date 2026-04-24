@@ -2,6 +2,11 @@
 
 All notable changes to GuildBankRestock will be documented here.
 
+## [0.8.9] - 2026-04-24
+
+### Changed
+- Minimap button now uses the in-game `GUILDPERK_MOBILEBANKING` icon instead of a custom PNG
+
 ## [0.8.8] - 2026-04-24
 
 ### Added
