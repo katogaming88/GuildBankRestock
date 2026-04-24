@@ -2,6 +2,11 @@
 
 All notable changes to GuildBankRestock will be documented here.
 
+## [0.8.11] - 2026-04-24
+
+### Fixed
+- Minimap icon was black — switched from path-based lookup to file data ID (413587) which is required for retail
+
 ## [0.8.10] - 2026-04-24
 
 ### Added

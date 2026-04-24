@@ -12,7 +12,7 @@ btn:SetSize(31, 31)
 local icon = btn:CreateTexture(nil, "BACKGROUND")
 icon:SetSize(20, 20)
 icon:SetPoint("CENTER")
-icon:SetTexture("Interface\\Icons\\GUILDPERK_MOBILEBANKING")
+icon:SetTexture(413587)  -- GUILDPERK_MOBILEBANKING
 
 local border = btn:CreateTexture(nil, "OVERLAY")
 border:SetTexture("Interface\\Minimap\\MiniMap-TrackingBorder")
