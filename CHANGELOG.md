@@ -2,6 +2,16 @@
 
 All notable changes to GuildBankRestock will be documented here.
 
+## [0.8.7] - 2026-04-24
+
+### Added
+- To Buy column now autofills after a guild bank scan: calculates `max(0, Target − In Bank)` for every item and refreshes the UI automatically
+
+### Fixed
+- Target Qty field now saves when clicking away (focus-loss), not only on Enter — previously, typing a target without pressing Enter meant the scan would recalculate using the old (unsaved) value and reset To Buy to 0
+- `RefreshToBuyUI` no longer errors when the addon frame was never opened before a scan (`tabGroup` nil guard)
+- To Buy values are now populated on addon load so the column shows the correct baseline immediately instead of showing 0 for every item until a profile change or scan
+
 ## [0.8.6] - 2026-04-23
 
 ### Added

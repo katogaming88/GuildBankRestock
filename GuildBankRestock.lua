@@ -203,6 +203,7 @@ function GBR:OnInitialize()
 
     LoadSettings()
     if ns.ApplySettingsToUI then ns.ApplySettingsToUI() end
+    if ns.RecalculateToBuy then ns.RecalculateToBuy() end
 
     -- Load persisted log and replay into the ScrollingMessageFrame
     ns.log = self.db.global.log

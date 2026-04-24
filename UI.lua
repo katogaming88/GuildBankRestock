@@ -445,7 +445,7 @@ BuildCategoryContent = function(catIdx)
                 toBuyBox:DisableButton(true)
                 toBuyBox:SetMaxLetters(3)
 
-                targetBox:SetCallback("OnEnterPressed", function(_, _, text)
+                local function ApplyTarget(text)
                     local v = math.max(0, tonumber(text) or 0)
                     targetBox:SetText(tostring(v))
                     ns.SetProfileTarget(catIdx, i, v)
@@ -453,6 +453,14 @@ BuildCategoryContent = function(catIdx)
                     local needed = math.max(0, v - inBank)
                     ns.toBuy[catIdx .. "_" .. i] = needed
                     toBuyBox:SetText(tostring(needed))
+                end
+
+                targetBox:SetCallback("OnEnterPressed", function(_, _, text)
+                    ApplyTarget(text)
+                end)
+
+                targetBox:SetCallback("OnEditFocusLost", function(widget)
+                    ApplyTarget(widget:GetText())
                 end)
 
                 toBuyBox:SetCallback("OnEnterPressed", function(_, _, text)
@@ -741,7 +749,7 @@ ns.UpdateUI = UpdateUI
 -- Callbacks for Profiles.lua  (rebuild current tab from state)
 -- ============================================================
 ns.RefreshToBuyUI = function()
-    if ns.state == ns.STATE.IDLE and currentCatIdx ~= LOG_TAB then
+    if ns.state == ns.STATE.IDLE and currentCatIdx ~= LOG_TAB and tabGroup then
         BuildCategoryContent(currentCatIdx)
     end
 end
