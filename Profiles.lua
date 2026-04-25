@@ -8,7 +8,19 @@ local _, ns = ...
 -- ============================================================
 
 local function db()
-    return ns.addon.db.global
+    local g = ns.addon.db.global
+    return ns.context == "personal" and g.personal or g
+end
+
+local function SnapshotInclusion(profile)
+    profile._inc = {}
+    for catIdx, cat in ipairs(ns.CATEGORIES) do
+        for itemIdx, item in ipairs(cat.items) do
+            if not item.header and item.enabled then
+                profile._inc[catIdx .. "_" .. itemIdx] = true
+            end
+        end
+    end
 end
 
 function ns.GetProfileNames()
@@ -23,6 +35,7 @@ end
 function ns.CreateProfile(name)
     if not db().profiles then db().profiles = {} end
     db().profiles[name] = db().profiles[name] or {}
+    SnapshotInclusion(db().profiles[name])
     ns.SetActiveProfile(name)
 end
 
@@ -35,8 +48,25 @@ function ns.DeleteProfile(name)
 end
 
 function ns.SetActiveProfile(name)
-    ns.currentProfile        = name
-    db().activeProfile       = name
+    ns.currentProfile  = name
+    db().activeProfile = name
+    -- Sync item.enabled with the profile's inclusion snapshot so StartSearch stays correct.
+    if name then
+        local profile = db().profiles and db().profiles[name]
+        if profile and profile._inc ~= nil then
+            for catIdx, cat in ipairs(ns.CATEGORIES) do
+                for itemIdx, item in ipairs(cat.items) do
+                    if not item.header then
+                        local want = profile._inc[catIdx .. "_" .. itemIdx] == true
+                        if item.enabled ~= want then
+                            item.enabled = want
+                            ns.SaveItem(catIdx, itemIdx)
+                        end
+                    end
+                end
+            end
+        end
+    end
     ns.RecalculateToBuy()
     if ns.RefreshProfileUI then ns.RefreshProfileUI() end
 end
@@ -62,8 +92,11 @@ function ns.SaveProfileAs(newName)
     local currentData = (ns.currentProfile and db().profiles[ns.currentProfile]) or {}
     db().profiles[newName] = {}
     for k, v in pairs(currentData) do
-        db().profiles[newName][k] = v
+        if k ~= "_inc" then
+            db().profiles[newName][k] = v
+        end
     end
+    SnapshotInclusion(db().profiles[newName])
     ns.SetActiveProfile(newName)
 end
 
@@ -74,10 +107,27 @@ function ns.RecalculateToBuy()
         for itemIdx, item in ipairs(cat.items) do
             if not item.header then
                 local target = ns.GetProfileTarget(catIdx, itemIdx)
-                local inBank = ns.guildBankScanned and (ns.guildBankStock[item.id] or 0) or 0
-                ns.toBuy[catIdx .. "_" .. itemIdx] = math.max(0, target - inBank)
+                ns.toBuy[catIdx .. "_" .. itemIdx] = math.max(0, target - ns.GetStock(item.id))
             end
         end
     end
     if ns.RefreshToBuyUI then ns.RefreshToBuyUI() end
+end
+
+-- Returns true if catIdx/itemIdx is part of the current profile's inclusion snapshot.
+-- Profiles without a snapshot (_inc == nil) show everything (backward compat).
+function ns.IsProfileIncluded(catIdx, itemIdx)
+    if not ns.currentProfile then return true end
+    local profile = db().profiles and db().profiles[ns.currentProfile]
+    if not profile or profile._inc == nil then return true end
+    return profile._inc[catIdx .. "_" .. itemIdx] == true
+end
+
+function ns.SetProfileIncluded(catIdx, itemIdx, included)
+    if not ns.currentProfile then return end
+    if not db().profiles then return end
+    local profile = db().profiles[ns.currentProfile]
+    if not profile then return end
+    if not profile._inc then profile._inc = {} end
+    profile._inc[catIdx .. "_" .. itemIdx] = included or nil
 end

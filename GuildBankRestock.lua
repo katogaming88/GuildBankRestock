@@ -24,6 +24,17 @@ local defaults = {
         budget        = 0,
         log           = {},
         minimapAngle  = nil,
+        context       = "guild",
+        windowWidth   = nil,
+        windowHeight  = nil,
+        personal      = {
+            items         = {},
+            rankFilter    = nil,
+            mode          = "bulk",
+            activeProfile = nil,
+            profiles      = {},
+            budget        = 0,
+        },
     },
 }
 
@@ -53,6 +64,10 @@ ns.currentProfile     = nil
 ns.toBuy              = {}
 ns.budget             = 0
 ns.runStartMoney      = 0
+ns.context            = "guild"
+ns.personalStock      = {}
+ns.personalScanned    = false
+ns.personalScanTime   = nil
 
 -- ============================================================
 -- Helpers
@@ -90,6 +105,27 @@ function ns.Reset()
     wipe(ns.activeItems)
     wipe(ns.resultRows)
     wipe(ns.boughtIndices)
+end
+
+function ns.ContextDB()
+    local g = ns.addon.db.global
+    return ns.context == "personal" and g.personal or g
+end
+
+function ns.GetStock(itemID)
+    if ns.context == "guild" then
+        return ns.guildBankScanned and (ns.guildBankStock[itemID] or 0) or 0
+    else
+        return ns.personalScanned and (ns.personalStock[itemID] or 0) or 0
+    end
+end
+
+function ns.SwitchContext(newContext)
+    ns.context = newContext
+    ns.addon.db.global.context = newContext
+    ns.LoadContextSettings(newContext)
+    if ns.ApplySettingsToUI then ns.ApplySettingsToUI() end
+    if ns.RecalculateToBuy then ns.RecalculateToBuy() end
 end
 
 function ns.BuildSearchStrings()
@@ -132,28 +168,37 @@ end
 -- ============================================================
 -- SavedVariables (via AceDB)
 -- ============================================================
-local function LoadSettings()
-    local db = ns.addon.db.global
-    ns.mode           = db.mode or "bulk"
-    ns.currentProfile = db.activeProfile
-    ns.budget         = db.budget or 0
+function ns.LoadContextSettings(context)
+    local g = ns.addon.db.global
+    local ctxDB = context == "personal" and g.personal or g
+    ns.mode           = ctxDB.mode or "bulk"
+    ns.currentProfile = ctxDB.activeProfile
+    ns.budget         = ctxDB.budget or 0
     for catIdx, cat in ipairs(CATEGORIES) do
         for itemIdx, item in ipairs(cat.items) do
             if not item.header then
-                local saved = db.items[catIdx .. "_" .. itemIdx]
+                local saved = ctxDB.items[catIdx .. "_" .. itemIdx]
                 if saved then
                     item.enabled  = saved.enabled
-                    item.qty      = saved.qty
+                    item.qty      = saved.qty or item.qty or 1
                     item.maxPrice = saved.maxPrice
+                else
+                    item.enabled  = false
+                    item.maxPrice = nil
                 end
             end
         end
     end
 end
 
+local function LoadSettings()
+    ns.context = ns.addon.db.global.context or "guild"
+    ns.LoadContextSettings(ns.context)
+end
+
 function ns.SaveItem(catIdx, itemIdx)
     local item = CATEGORIES[catIdx].items[itemIdx]
-    ns.addon.db.global.items[catIdx .. "_" .. itemIdx] = {
+    ns.ContextDB().items[catIdx .. "_" .. itemIdx] = {
         enabled  = item.enabled,
         qty      = item.qty,
         maxPrice = item.maxPrice,
@@ -161,7 +206,7 @@ function ns.SaveItem(catIdx, itemIdx)
 end
 
 function ns.SaveRankFilter(rank)
-    ns.addon.db.global.rankFilter = rank
+    ns.ContextDB().rankFilter = rank
 end
 
 -- ============================================================

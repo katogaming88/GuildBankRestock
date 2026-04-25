@@ -17,13 +17,17 @@ local logScrollbarUpdating = false
 local currentCatIdx       = 1
 local currentRankFilter   = nil
 local suppressStopMessage = false
+local guildCtxBtn, personalCtxBtn
+local categoryScroll       -- AceGUI ScrollFrame managed outside AceGUI's layout
+local showAllProfileItems  = false  -- when true, show non-profile items in restock mode
 
 local _version  = (C_AddOns and C_AddOns.GetAddOnMetadata or GetAddOnMetadata)(ADDON_NAME, "Version") or "?"
 local LOG_TAB   = #CATEGORIES + 1
 local ABOUT_TAB = #CATEGORIES + 2
+local ALL_TAB   = #CATEGORIES + 3
 
 -- Forward declarations
-local BuildCategoryContent, BuildLogContent, BuildAboutContent
+local BuildCategoryContent, BuildLogContent, BuildAboutContent, BuildAllItemsContent
 local ShowTabView, ShowStatusView, UpdateUI, StartSearch
 local SelectTab
 
@@ -55,6 +59,10 @@ logFrame:Hide()
 
 ns.AppendLogEntry = function(msg, r, g, b)
     logFrame:AddMessage(msg, r or 1, g or 1, b or 1)
+end
+
+local function ReleaseCategoryScroll()
+    categoryScroll = nil  -- actual release handled by contentGroup:ReleaseChildren()
 end
 
 local function DetachLogFrame()
@@ -159,8 +167,13 @@ StartSearch = function()
             end
         end
         if #ns.activeItems == 0 then
-            ns.Print("Nothing to buy — guild bank is fully stocked for this profile.")
-            ns.Log("Guild bank fully stocked. No items queued.", 0.4, 1, 0.4)
+            if ns.context == "personal" then
+                ns.Print("Nothing to buy — you're fully stocked for this profile.")
+                ns.Log("Fully stocked. No items queued.", 0.4, 1, 0.4)
+            else
+                ns.Print("Nothing to buy — guild bank is fully stocked for this profile.")
+                ns.Log("Guild bank fully stocked. No items queued.", 0.4, 1, 0.4)
+            end
             return
         end
         if skipped > 0 then
@@ -218,6 +231,7 @@ end
 -- Build category tab content  (rebuilt on every tab select)
 -- ============================================================
 BuildCategoryContent = function(catIdx)
+    ReleaseCategoryScroll()
     contentGroup:ReleaseChildren()
     DetachLogFrame()
 
@@ -255,13 +269,15 @@ BuildCategoryContent = function(catIdx)
 
     AddBtn(modeRow, ModeLabel("Bulk", "bulk"), nil, function()
         ns.mode = "bulk"
-        ns.addon.db.global.mode = "bulk"
+        ns.ContextDB().mode = "bulk"
+        showAllProfileItems = false
         BuildCategoryContent(catIdx)
     end)
 
     AddBtn(modeRow, ModeLabel("Restock", "restock"), nil, function()
         ns.mode = "restock"
-        ns.addon.db.global.mode = "restock"
+        ns.ContextDB().mode = "restock"
+        showAllProfileItems = false
         ns.RecalculateToBuy()
         BuildCategoryContent(catIdx)
     end)
@@ -313,6 +329,34 @@ BuildCategoryContent = function(catIdx)
         contentGroup:AddChild(profileRow)
     end
 
+    -- ── Personal scan status row ──────────────────────────────
+    if ns.context == "personal" then
+        local scanRow = AceGUI:Create("SimpleGroup")
+        scanRow:SetLayout("Flow")
+        scanRow:SetFullWidth(true)
+
+        local scanBtn = AceGUI:Create("Button")
+        scanBtn:SetText("Scan Inventory")
+        scanBtn:SetAutoWidth(true)
+        scanBtn:SetCallback("OnClick", function()
+            if ns.DoPersonalScan then ns.DoPersonalScan() end
+        end)
+        scanRow:AddChild(scanBtn)
+
+        local statusLbl = AceGUI:Create("Label")
+        if ns.personalScanned and ns.personalScanTime then
+            statusLbl:SetText("|cff00ff00Scanned at " .. ns.personalScanTime .. "|r")
+        elseif ns.personalScanned then
+            statusLbl:SetText("|cff00ff00Scanned|r")
+        else
+            statusLbl:SetText("|cffff8844Not yet scanned — open your bank to scan|r")
+        end
+        statusLbl:SetRelativeWidth(0.7)
+        scanRow:AddChild(statusLbl)
+
+        contentGroup:AddChild(scanRow)
+    end
+
     -- ── Column header row ─────────────────────────────────────
     local headerRow = AceGUI:Create("SimpleGroup")
     headerRow:SetLayout("Flow")
@@ -330,7 +374,7 @@ BuildCategoryContent = function(catIdx)
         headerRow:AddChild(th)
 
         local ibh = AceGUI:Create("Label")
-        ibh:SetText("|cffffd100In Bank|r")
+        ibh:SetText("|cffffd100" .. (ns.context == "personal" and "In Bags" or "In Bank") .. "|r")
         ibh:SetRelativeWidth(0.07)
         headerRow:AddChild(ibh)
 
@@ -370,8 +414,15 @@ BuildCategoryContent = function(catIdx)
     AddBtn(btnBar, "Select All", nil, function()
         for i2, item2 in ipairs(cat.items) do
             if not item2.header then
-                item2.enabled = true
-                ns.SaveItem(catIdx, i2)
+                local visible = ns.mode ~= "restock" or not ns.currentProfile
+                    or ns.IsProfileIncluded(catIdx, i2) or showAllProfileItems
+                if visible then
+                    item2.enabled = true
+                    ns.SaveItem(catIdx, i2)
+                    if ns.mode == "restock" and ns.currentProfile then
+                        ns.SetProfileIncluded(catIdx, i2, true)
+                    end
+                end
             end
         end
         BuildCategoryContent(catIdx)
@@ -380,8 +431,15 @@ BuildCategoryContent = function(catIdx)
     AddBtn(btnBar, "Select None", nil, function()
         for i2, item2 in ipairs(cat.items) do
             if not item2.header then
-                item2.enabled = false
-                ns.SaveItem(catIdx, i2)
+                local visible = ns.mode ~= "restock" or not ns.currentProfile
+                    or ns.IsProfileIncluded(catIdx, i2) or showAllProfileItems
+                if visible then
+                    item2.enabled = false
+                    ns.SaveItem(catIdx, i2)
+                    if ns.mode == "restock" and ns.currentProfile then
+                        ns.SetProfileIncluded(catIdx, i2, false)
+                    end
+                end
             end
         end
         BuildCategoryContent(catIdx)
@@ -404,6 +462,13 @@ BuildCategoryContent = function(catIdx)
         ns.SaveRankFilter(nil)
         BuildCategoryContent(catIdx)
     end)
+
+    if ns.mode == "restock" and ns.currentProfile then
+        AddBtn(btnBar, showAllProfileItems and "Hide Extra" or "Add Items", nil, function()
+            showAllProfileItems = not showAllProfileItems
+            BuildCategoryContent(catIdx)
+        end)
+    end
 
     contentGroup:AddChild(btnBar)
 
@@ -454,33 +519,47 @@ BuildCategoryContent = function(catIdx)
         local v = math.max(0, tonumber(text) or 0)
         budgetBox:SetText(tostring(v))
         ns.budget = v
-        ns.addon.db.global.budget = v
+        ns.ContextDB().budget = v
     end)
     searchBar:AddChild(budgetBox)
 
     AddBtn(searchBar, "Start Search", nil, StartSearch)
 
-    contentGroup:AddChild(searchBar)
-
     contentGroup:AddChild(headerRow)
 
     -- ── Scrollable item list (fills remaining height) ─────────
-    local scroll = AceGUI:Create("ScrollFrame")
+    categoryScroll = AceGUI:Create("ScrollFrame")
+    local scroll = categoryScroll
     scroll:SetLayout("List")
     scroll:SetFullWidth(true)
     contentGroup:AddChild(scroll)
-    -- List layout only sets TOPLEFT; add BOTTOMRIGHT so the scroll fills remaining height
-    scroll.frame:SetPoint("BOTTOMRIGHT", contentGroup.content, "BOTTOMRIGHT", 0, 0)
+    -- AceGUI List layout sets TOPLEFT only; extend to bottom leaving room for searchBar
+    scroll.frame:SetPoint("BOTTOMRIGHT", contentGroup.content, "BOTTOMRIGHT", 0, 32)
+
+    contentGroup:AddChild(searchBar)
+    searchBar.frame:ClearAllPoints()
+    searchBar.frame:SetPoint("BOTTOMLEFT",  contentGroup.content, "BOTTOMLEFT",  0, 0)
+    searchBar.frame:SetPoint("BOTTOMRIGHT", contentGroup.content, "BOTTOMRIGHT", 0, 0)
+
+    local function ItemIsVisible(iIdx, iItem)
+        if iItem.rank and currentRankFilter ~= nil and iItem.rank ~= currentRankFilter then
+            return false
+        end
+        if ns.mode == "restock" and ns.currentProfile then
+            if not ns.IsProfileIncluded(catIdx, iIdx) and not showAllProfileItems then
+                return false
+            end
+        end
+        return true
+    end
 
     local editBoxes = {}
     for i, item in ipairs(cat.items) do
         if item.header then
-            -- Only show header if at least one item below it passes the rank filter
             local anyVisible = false
             for j = i + 1, #cat.items do
                 if cat.items[j].header then break end
-                local jItem = cat.items[j]
-                if not jItem.rank or currentRankFilter == nil or jItem.rank == currentRankFilter then
+                if ItemIsVisible(j, cat.items[j]) then
                     anyVisible = true
                     break
                 end
@@ -492,7 +571,7 @@ BuildCategoryContent = function(catIdx)
                 scroll:AddChild(heading)
             end
 
-        elseif not item.rank or currentRankFilter == nil or item.rank == currentRankFilter then
+        elseif ItemIsVisible(i, item) then
             local rowGroup = AceGUI:Create("SimpleGroup")
             rowGroup:SetLayout("Flow")
             rowGroup:SetFullWidth(true)
@@ -516,6 +595,12 @@ BuildCategoryContent = function(catIdx)
             cb:SetCallback("OnValueChanged", function(_, _, val)
                 item.enabled = val
                 ns.SaveItem(catIdx, i)
+                if ns.mode == "restock" and ns.currentProfile then
+                    ns.SetProfileIncluded(catIdx, i, val)
+                    if not val then
+                        BuildCategoryContent(catIdx)
+                    end
+                end
             end)
             cb:SetCallback("OnEnter", function(widget)
                 if widget.itemLink then
@@ -538,7 +623,7 @@ BuildCategoryContent = function(catIdx)
                 local inBankBox = AceGUI:Create("EditBox")
                 inBankBox:SetRelativeWidth(0.07)
                 inBankBox:SetLabel("")
-                inBankBox:SetText(tostring(ns.guildBankScanned and (ns.guildBankStock[item.id] or 0) or 0))
+                inBankBox:SetText(tostring(ns.GetStock(item.id)))
                 inBankBox:DisableButton(true)
                 inBankBox:SetMaxLetters(3)
                 inBankBox:SetDisabled(true)
@@ -554,8 +639,7 @@ BuildCategoryContent = function(catIdx)
                     local v = math.max(0, tonumber(text) or 0)
                     targetBox:SetText(tostring(v))
                     ns.SetProfileTarget(catIdx, i, v)
-                    local inBank = ns.guildBankScanned and (ns.guildBankStock[item.id] or 0) or 0
-                    local needed = math.max(0, v - inBank)
+                    local needed = math.max(0, v - ns.GetStock(item.id))
                     ns.toBuy[catIdx .. "_" .. i] = needed
                     toBuyBox:SetText(tostring(needed))
                 end
@@ -660,6 +744,459 @@ BuildCategoryContent = function(catIdx)
                 self:SetPropagateKeyboardInput(false)
                 -- prev row same column; wrap to last row
                 dest = editBoxes[idx - colsPerRow] or editBoxes[#editBoxes - (colsPerRow - 1 - col)]
+            elseif key == "RETURN" or key == "NUMPADENTER" then
+                self:SetPropagateKeyboardInput(false)
+                return
+            else
+                self:SetPropagateKeyboardInput(true)
+                return
+            end
+            if dest then dest:SetFocus(); dest:HighlightText() end
+        end)
+    end
+end
+
+-- ============================================================
+-- Build "Selected" tab — all checked/profile items across every category
+-- ============================================================
+BuildAllItemsContent = function()
+    ReleaseCategoryScroll()
+    contentGroup:ReleaseChildren()
+    DetachLogFrame()
+
+    local function AddBtn(parent, text, width, onClick)
+        local btn = AceGUI:Create("Button")
+        btn:SetText(text)
+        if width then btn:SetWidth(width) else btn:SetAutoWidth(true) end
+        btn:SetCallback("OnClick", onClick)
+        parent:AddChild(btn)
+        return btn
+    end
+
+    local function RankLabel(label, rank)
+        return currentRankFilter == rank and ("|cffffd100" .. label .. "|r") or label
+    end
+
+    local function ModeLabel(label, mode)
+        return ns.mode == mode and ("|cffffd100" .. label .. "|r") or label
+    end
+
+    -- ── Mode row ──────────────────────────────────────────────
+    local modeRow = AceGUI:Create("SimpleGroup")
+    modeRow:SetLayout("Flow")
+    modeRow:SetFullWidth(true)
+    AddBtn(modeRow, ModeLabel("Bulk", "bulk"), nil, function()
+        ns.mode = "bulk"
+        ns.ContextDB().mode = "bulk"
+        showAllProfileItems = false
+        BuildAllItemsContent()
+    end)
+    AddBtn(modeRow, ModeLabel("Restock", "restock"), nil, function()
+        ns.mode = "restock"
+        ns.ContextDB().mode = "restock"
+        showAllProfileItems = false
+        ns.RecalculateToBuy()
+        BuildAllItemsContent()
+    end)
+    contentGroup:AddChild(modeRow)
+
+    -- ── Profile row (restock only) ────────────────────────────
+    if ns.mode == "restock" then
+        local profileRow = AceGUI:Create("SimpleGroup")
+        profileRow:SetLayout("Flow")
+        profileRow:SetFullWidth(true)
+
+        local names = ns.GetProfileNames()
+
+        AddBtn(profileRow, "<<", nil, function()
+            if #names < 2 then return end
+            local idx = 1
+            for i, n in ipairs(names) do if n == ns.currentProfile then idx = i break end end
+            idx = idx - 1; if idx < 1 then idx = #names end
+            ns.SetActiveProfile(names[idx])
+        end)
+
+        local profileLabel = AceGUI:Create("Label")
+        profileLabel:SetText(ns.currentProfile or "(no profile)")
+        profileLabel:SetWidth(110)
+        profileRow:AddChild(profileLabel)
+
+        AddBtn(profileRow, ">>", nil, function()
+            if #names < 2 then return end
+            local idx = 1
+            for i, n in ipairs(names) do if n == ns.currentProfile then idx = i break end end
+            idx = idx % #names + 1
+            ns.SetActiveProfile(names[idx])
+        end)
+
+        AddBtn(profileRow, "New", nil, function()
+            StaticPopup_Show("GUILDBANKRESTOCK_NEW_PROFILE")
+        end)
+
+        local delBtn = AddBtn(profileRow, "Delete", nil, function()
+            if ns.currentProfile then ns.DeleteProfile(ns.currentProfile) end
+        end)
+        delBtn:SetDisabled(not ns.currentProfile)
+
+        AddBtn(profileRow, "Save", nil, function()
+            StaticPopup_Show("GUILDBANKRESTOCK_SAVE_PROFILE")
+        end)
+
+        contentGroup:AddChild(profileRow)
+    end
+
+    -- ── Personal scan status row ──────────────────────────────
+    if ns.context == "personal" then
+        local scanRow = AceGUI:Create("SimpleGroup")
+        scanRow:SetLayout("Flow")
+        scanRow:SetFullWidth(true)
+
+        local scanBtn = AceGUI:Create("Button")
+        scanBtn:SetText("Scan Inventory")
+        scanBtn:SetAutoWidth(true)
+        scanBtn:SetCallback("OnClick", function()
+            if ns.DoPersonalScan then ns.DoPersonalScan() end
+        end)
+        scanRow:AddChild(scanBtn)
+
+        local statusLbl = AceGUI:Create("Label")
+        if ns.personalScanned and ns.personalScanTime then
+            statusLbl:SetText("|cff00ff00Scanned at " .. ns.personalScanTime .. "|r")
+        elseif ns.personalScanned then
+            statusLbl:SetText("|cff00ff00Scanned|r")
+        else
+            statusLbl:SetText("|cffff8844Not yet scanned — open your bank to scan|r")
+        end
+        statusLbl:SetRelativeWidth(0.7)
+        scanRow:AddChild(statusLbl)
+
+        contentGroup:AddChild(scanRow)
+    end
+
+    -- ── Column header row ─────────────────────────────────────
+    local headerRow = AceGUI:Create("SimpleGroup")
+    headerRow:SetLayout("Flow")
+    headerRow:SetFullWidth(true)
+
+    local itemHeader = AceGUI:Create("Label")
+    itemHeader:SetText("|cffffd100Item|r")
+    itemHeader:SetRelativeWidth(ns.mode == "restock" and 0.27 or 0.38)
+    headerRow:AddChild(itemHeader)
+
+    if ns.mode == "restock" then
+        local th = AceGUI:Create("Label") th:SetText("|cffffd100Target|r") th:SetRelativeWidth(0.07) headerRow:AddChild(th)
+        local ibh = AceGUI:Create("Label") ibh:SetText("|cffffd100" .. (ns.context == "personal" and "In Bags" or "In Bank") .. "|r") ibh:SetRelativeWidth(0.07) headerRow:AddChild(ibh)
+        local bh = AceGUI:Create("Label") bh:SetText("|cffffd100To Buy|r") bh:SetRelativeWidth(0.07) headerRow:AddChild(bh)
+    else
+        local qh = AceGUI:Create("Label") qh:SetText("|cffffd100Qty|r") qh:SetRelativeWidth(0.10) headerRow:AddChild(qh)
+    end
+
+    local mkth = AceGUI:Create("Label") mkth:SetText("|cffffd100Mkt Price|r") mkth:SetRelativeWidth(0.13) mkth.label:SetJustifyH("CENTER") headerRow:AddChild(mkth)
+    local esth = AceGUI:Create("Label") esth:SetText("|cffffd100Est g|r") esth:SetRelativeWidth(0.12) esth.label:SetJustifyH("CENTER") headerRow:AddChild(esth)
+    local mgh = AceGUI:Create("Label") mgh:SetText("|cffffd100Max g|r") mgh:SetRelativeWidth(0.12) headerRow:AddChild(mgh)
+
+    -- ── Button bar ────────────────────────────────────────────
+    local btnBar = AceGUI:Create("SimpleGroup")
+    btnBar:SetLayout("Flow")
+    btnBar:SetFullWidth(true)
+
+    AddBtn(btnBar, "Select All", nil, function()
+        for ci, ccat in ipairs(CATEGORIES) do
+            for ii, citem in ipairs(ccat.items) do
+                if not citem.header then
+                    local visible = ns.mode ~= "restock" or not ns.currentProfile
+                        or ns.IsProfileIncluded(ci, ii) or showAllProfileItems
+                    if visible then
+                        citem.enabled = true
+                        ns.SaveItem(ci, ii)
+                        if ns.mode == "restock" and ns.currentProfile then
+                            ns.SetProfileIncluded(ci, ii, true)
+                        end
+                    end
+                end
+            end
+        end
+        BuildAllItemsContent()
+    end)
+
+    AddBtn(btnBar, "Select None", nil, function()
+        for ci, ccat in ipairs(CATEGORIES) do
+            for ii, citem in ipairs(ccat.items) do
+                if not citem.header then
+                    local visible = ns.mode ~= "restock" or not ns.currentProfile
+                        or ns.IsProfileIncluded(ci, ii) or showAllProfileItems
+                    if visible then
+                        citem.enabled = false
+                        ns.SaveItem(ci, ii)
+                        if ns.mode == "restock" and ns.currentProfile then
+                            ns.SetProfileIncluded(ci, ii, false)
+                        end
+                    end
+                end
+            end
+        end
+        BuildAllItemsContent()
+    end)
+
+    AddBtn(btnBar, RankLabel("Rank 1", 1), nil, function()
+        currentRankFilter = 1; ns.SaveRankFilter(1); BuildAllItemsContent()
+    end)
+    AddBtn(btnBar, RankLabel("Rank 2", 2), nil, function()
+        currentRankFilter = 2; ns.SaveRankFilter(2); BuildAllItemsContent()
+    end)
+    AddBtn(btnBar, RankLabel("All Ranks", nil), nil, function()
+        currentRankFilter = nil; ns.SaveRankFilter(nil); BuildAllItemsContent()
+    end)
+
+    if ns.mode == "restock" and ns.currentProfile then
+        AddBtn(btnBar, showAllProfileItems and "Hide Extra" or "Add Items", nil, function()
+            showAllProfileItems = not showAllProfileItems
+            BuildAllItemsContent()
+        end)
+    end
+
+    contentGroup:AddChild(btnBar)
+
+    -- ── Estimated run total ───────────────────────────────────
+    local runEstTotal = 0
+    for ci, ccat in ipairs(CATEGORIES) do
+        for ii, citem in ipairs(ccat.items) do
+            if not citem.header and citem.enabled then
+                local price = GetTSMPrice(citem.id)
+                if price then
+                    local qty = ns.mode == "restock"
+                        and math.max(0, ns.toBuy[ci .. "_" .. ii] or 0)
+                        or (citem.qty or 1)
+                    runEstTotal = runEstTotal + price * qty
+                end
+            end
+        end
+    end
+
+    -- ── Search bar ────────────────────────────────────────────
+    local searchBar = AceGUI:Create("SimpleGroup")
+    searchBar:SetLayout("Flow")
+    searchBar:SetFullWidth(true)
+
+    local spacer = AceGUI:Create("Label") spacer:SetRelativeWidth(0.5) spacer:SetText("") searchBar:AddChild(spacer)
+
+    local runTotalLabel = AceGUI:Create("Label")
+    runTotalLabel:SetText(TSM_API
+        and ("|cffffd100Est Run:|r " .. FormatGold(runEstTotal))
+        or "|cff888888Est Run: (no TSM)|r")
+    runTotalLabel:SetWidth(150)
+    searchBar:AddChild(runTotalLabel)
+
+    local budgetLabel = AceGUI:Create("Label") budgetLabel:SetText("Budget:") budgetLabel:SetWidth(50) searchBar:AddChild(budgetLabel)
+
+    local budgetBox = AceGUI:Create("EditBox")
+    budgetBox:SetWidth(60)
+    budgetBox:SetLabel("")
+    budgetBox:SetText(tostring(ns.budget))
+    budgetBox:DisableButton(true)
+    budgetBox:SetCallback("OnEnterPressed", function(_, _, text)
+        local v = math.max(0, tonumber(text) or 0)
+        budgetBox:SetText(tostring(v))
+        ns.budget = v
+        ns.ContextDB().budget = v
+    end)
+    searchBar:AddChild(budgetBox)
+    AddBtn(searchBar, "Start Search", nil, StartSearch)
+
+    contentGroup:AddChild(headerRow)
+
+    -- ── Scrollable item list ──────────────────────────────────
+    categoryScroll = AceGUI:Create("ScrollFrame")
+    local scroll = categoryScroll
+    scroll:SetLayout("List")
+    scroll:SetFullWidth(true)
+    contentGroup:AddChild(scroll)
+    scroll.frame:SetPoint("BOTTOMRIGHT", contentGroup.content, "BOTTOMRIGHT", 0, 32)
+
+    contentGroup:AddChild(searchBar)
+    searchBar.frame:ClearAllPoints()
+    searchBar.frame:SetPoint("BOTTOMLEFT",  contentGroup.content, "BOTTOMLEFT",  0, 0)
+    searchBar.frame:SetPoint("BOTTOMRIGHT", contentGroup.content, "BOTTOMRIGHT", 0, 0)
+
+    local editBoxes = {}
+    local anyItems  = false
+
+    for catIdx, cat in ipairs(CATEGORIES) do
+        -- Collect visible items for this category
+        local visibleItems = {}
+        for itemIdx, item in ipairs(cat.items) do
+            if not item.header then
+                local rankOk = not item.rank or currentRankFilter == nil or item.rank == currentRankFilter
+                if rankOk then
+                    local show
+                    if ns.mode == "restock" and ns.currentProfile then
+                        show = ns.IsProfileIncluded(catIdx, itemIdx) or showAllProfileItems
+                    else
+                        show = item.enabled
+                    end
+                    if show then
+                        visibleItems[#visibleItems + 1] = { itemIdx = itemIdx, item = item }
+                    end
+                end
+            end
+        end
+
+        if #visibleItems > 0 then
+            anyItems = true
+            local catHeading = AceGUI:Create("Heading")
+            catHeading:SetText(cat.name)
+            catHeading:SetFullWidth(true)
+            scroll:AddChild(catHeading)
+
+            for _, entry in ipairs(visibleItems) do
+                local i    = entry.itemIdx
+                local item = entry.item
+
+                local rowGroup = AceGUI:Create("SimpleGroup")
+                rowGroup:SetLayout("Flow")
+                rowGroup:SetFullWidth(true)
+
+                local cb = AceGUI:Create("CheckBox")
+                cb:SetRelativeWidth(ns.mode == "restock" and 0.27 or 0.38)
+                cb:SetValue(item.enabled)
+                cb:SetLabel("item:" .. item.id)
+
+                local function TryLoadLink(attempts)
+                    local _, link = GetItemInfo(item.id)
+                    if link then
+                        cb:SetLabel(link)
+                        cb.itemLink = link
+                    elseif attempts < 10 then
+                        C_Timer.After(0.5, function() TryLoadLink(attempts + 1) end)
+                    end
+                end
+                TryLoadLink(0)
+
+                cb:SetCallback("OnValueChanged", function(_, _, val)
+                    item.enabled = val
+                    ns.SaveItem(catIdx, i)
+                    if ns.mode == "restock" and ns.currentProfile then
+                        ns.SetProfileIncluded(catIdx, i, val)
+                        if not val then BuildAllItemsContent() end
+                    end
+                end)
+                cb:SetCallback("OnEnter", function(widget)
+                    if widget.itemLink then
+                        GameTooltip:SetOwner(widget.frame, "ANCHOR_RIGHT")
+                        GameTooltip:SetHyperlink(widget.itemLink)
+                        GameTooltip:Show()
+                    end
+                end)
+                cb:SetCallback("OnLeave", function() GameTooltip:Hide() end)
+                rowGroup:AddChild(cb)
+
+                if ns.mode == "restock" then
+                    local targetBox = AceGUI:Create("EditBox")
+                    targetBox:SetRelativeWidth(0.07) targetBox:SetLabel("") targetBox:DisableButton(true) targetBox:SetMaxLetters(3)
+                    targetBox:SetText(tostring(ns.GetProfileTarget(catIdx, i)))
+
+                    local inBankBox = AceGUI:Create("EditBox")
+                    inBankBox:SetRelativeWidth(0.07) inBankBox:SetLabel("") inBankBox:DisableButton(true) inBankBox:SetMaxLetters(3) inBankBox:SetDisabled(true)
+                    inBankBox:SetText(tostring(ns.GetStock(item.id)))
+
+                    local toBuyBox = AceGUI:Create("EditBox")
+                    toBuyBox:SetRelativeWidth(0.07) toBuyBox:SetLabel("") toBuyBox:DisableButton(true) toBuyBox:SetMaxLetters(3)
+                    toBuyBox:SetText(tostring(ns.toBuy[catIdx .. "_" .. i] or 0))
+
+                    local function ApplyTarget(text)
+                        local v = math.max(0, tonumber(text) or 0)
+                        targetBox:SetText(tostring(v))
+                        ns.SetProfileTarget(catIdx, i, v)
+                        local needed = math.max(0, v - ns.GetStock(item.id))
+                        ns.toBuy[catIdx .. "_" .. i] = needed
+                        toBuyBox:SetText(tostring(needed))
+                    end
+                    targetBox:SetCallback("OnEnterPressed", function(_, _, text) ApplyTarget(text) end)
+                    targetBox:SetCallback("OnEditFocusLost", function(widget) ApplyTarget(widget:GetText()) end)
+                    toBuyBox:SetCallback("OnEnterPressed", function(_, _, text)
+                        local v = math.max(0, tonumber(text) or 0)
+                        ns.toBuy[catIdx .. "_" .. i] = v
+                        BuildAllItemsContent()
+                    end)
+
+                    rowGroup:AddChild(targetBox)
+                    rowGroup:AddChild(inBankBox)
+                    rowGroup:AddChild(toBuyBox)
+                    editBoxes[#editBoxes + 1] = targetBox.editbox
+                    editBoxes[#editBoxes + 1] = toBuyBox.editbox
+                else
+                    local qty = AceGUI:Create("EditBox")
+                    qty:SetRelativeWidth(0.10) qty:SetLabel("") qty:SetMaxLetters(3) qty:DisableButton(true)
+                    qty:SetText(tostring(item.qty))
+                    qty:SetCallback("OnEnterPressed", function(_, _, text)
+                        local v = tonumber(text) or 1
+                        if v < 1 then v = 1 end
+                        item.qty = v
+                        ns.SaveItem(catIdx, i)
+                        BuildAllItemsContent()
+                    end)
+                    rowGroup:AddChild(qty)
+                    editBoxes[#editBoxes + 1] = qty.editbox
+                end
+
+                local tsmPrice = GetTSMPrice(item.id)
+                local buyQty   = ns.mode == "restock" and (ns.toBuy[catIdx .. "_" .. i] or 0) or (item.qty or 1)
+
+                local mktLabel = AceGUI:Create("Label") mktLabel:SetRelativeWidth(0.13) mktLabel:SetText(FormatGold(tsmPrice)) mktLabel.label:SetJustifyH("CENTER") rowGroup:AddChild(mktLabel)
+                local estLabel = AceGUI:Create("Label") estLabel:SetRelativeWidth(0.12) estLabel:SetText(tsmPrice and FormatGold(tsmPrice * buyQty) or "—") estLabel.label:SetJustifyH("CENTER") rowGroup:AddChild(estLabel)
+
+                local maxPriceBox = AceGUI:Create("EditBox")
+                maxPriceBox:SetRelativeWidth(0.12) maxPriceBox:SetLabel("") maxPriceBox:SetMaxLetters(6) maxPriceBox:DisableButton(true)
+                maxPriceBox:SetText(item.maxPrice and item.maxPrice > 0 and tostring(item.maxPrice) or "")
+                maxPriceBox:SetCallback("OnEnterPressed", function(_, _, text)
+                    local v = tonumber(text) or 0
+                    if v < 0 then v = 0 end
+                    item.maxPrice = v > 0 and v or nil
+                    maxPriceBox:SetText(v > 0 and tostring(v) or "")
+                    ns.SaveItem(catIdx, i)
+                end)
+                rowGroup:AddChild(maxPriceBox)
+                editBoxes[#editBoxes + 1] = maxPriceBox.editbox
+
+                scroll:AddChild(rowGroup)
+            end
+        end
+    end
+
+    if not anyItems then
+        local emptyLabel = AceGUI:Create("Label")
+        emptyLabel:SetText(ns.mode == "restock"
+            and "|cff888888No items in profile. Use 'Add Items' or check items in each category tab.|r"
+            or  "|cff888888No items selected. Check items in each category tab.|r")
+        emptyLabel:SetFullWidth(true)
+        scroll:AddChild(emptyLabel)
+    end
+
+    -- ── Keyboard navigation ────────────────────────────────────
+    local colsPerRow = ns.mode == "restock" and 3 or 2
+    for idx, eb in ipairs(editBoxes) do
+        eb:SetScript("OnKeyDown", function(self, key)
+            local col  = (idx - 1) % colsPerRow
+            local dest
+            if key == "TAB" then
+                self:SetPropagateKeyboardInput(false)
+                dest = IsShiftKeyDown() and (editBoxes[idx - 1] or editBoxes[#editBoxes])
+                                        or  (editBoxes[idx + 1] or editBoxes[1])
+            elseif key == "RIGHT" then
+                self:SetPropagateKeyboardInput(false)
+                if col < colsPerRow - 1 then dest = editBoxes[idx + 1] end
+            elseif key == "LEFT" then
+                self:SetPropagateKeyboardInput(false)
+                if col > 0 then dest = editBoxes[idx - 1] end
+            elseif key == "DOWN" then
+                self:SetPropagateKeyboardInput(false)
+                dest = editBoxes[idx + colsPerRow] or editBoxes[col + 1]
+            elseif key == "UP" then
+                self:SetPropagateKeyboardInput(false)
+                dest = editBoxes[idx - colsPerRow] or editBoxes[#editBoxes - (colsPerRow - 1 - col)]
+            elseif key == "RETURN" or key == "NUMPADENTER" then
+                self:SetPropagateKeyboardInput(false)
+                return
             else
                 self:SetPropagateKeyboardInput(true)
                 return
@@ -673,6 +1210,7 @@ end
 -- Build log tab content
 -- ============================================================
 BuildLogContent = function()
+    ReleaseCategoryScroll()
     contentGroup:ReleaseChildren()
     DetachLogFrame()
 
@@ -769,6 +1307,7 @@ end
 -- About tab content
 -- ============================================================
 BuildAboutContent = function()
+    ReleaseCategoryScroll()
     contentGroup:ReleaseChildren()
     DetachLogFrame()
 
@@ -802,19 +1341,20 @@ BuildAboutContent = function()
     end
 
     Body("|cffffd700Guild Bank Restock|r  |cffaaaaaa" .. _version .. "|r\n")
-    Body("Automates restocking your guild bank with raid consumables purchased from the Auction House via Auctionator. Set your item quantities once — the addon handles searching and buying for you.")
+    Body("Automates buying raid consumables from the Auction House via Auctionator. Switch between |cffffd700Guild Bank|r mode (restock the bank for your raid) and |cffffd700Personal|r mode (restock your own bags). Set your targets once — the addon handles searching and buying for you.")
 
     Spacer()
     Heading("Who Is It For?")
-    Body("Guild bank officers and managers responsible for raid supply. Instead of manually browsing the AH for dozens of items, check what you need and let the addon handle the shopping.")
+    Body("|cffffd700Guild Bank mode|r — Officers and managers responsible for raid supply. Scan the guild bank, see what's short, and let the addon buy the difference.\n\n|cffffd700Personal mode|r — Any player keeping their own consumables stocked. Scan your bags, bank, and warband bank, then buy whatever you're running low on.")
 
     Spacer()
     Heading("Features")
     Body(
-        "|cffaaaaaa•|r  Categories: Gems, Enchants, Potions, Flasks, Oils\n" ..
+        "|cffaaaaaa•|r  Categories: Gems, Enchants, Potions, Flasks, Oils, Food, Augment Runes, Vantus Runes\n" ..
+        "|cffaaaaaa•|r  Guild Bank and Personal contexts with separate settings and profiles\n" ..
         "|cffaaaaaa•|r  Per-item quantity targets with optional max-price caps\n" ..
         "|cffaaaaaa•|r  Bulk Mode — buy a fixed quantity of each selected item\n" ..
-        "|cffaaaaaa•|r  Restock Mode — scan the guild bank first, only buy what's missing\n" ..
+        "|cffaaaaaa•|r  Restock Mode — scan inventory first, only buy what's missing\n" ..
         "|cffaaaaaa•|r  Budget cap to limit total spend per session\n" ..
         "|cffaaaaaa•|r  Named profiles for different raid comps or roles\n" ..
         "|cffaaaaaa•|r  Persistent activity log with export\n" ..
@@ -825,9 +1365,10 @@ BuildAboutContent = function()
     Heading("Getting Started")
     Body(
         "1. Open the addon with |cffaaaaaa/rs|r or click the minimap button\n" ..
-        "2. Check the items you want and set quantities\n" ..
-        "3. Open the Auction House, then click |cffffd700Start|r\n" ..
-        "4. In Restock mode: scan your guild bank first so the addon only buys what's short"
+        "2. Choose |cffffd700Guild|r or |cffffd700Personal|r at the top of the sidebar\n" ..
+        "3. Check the items you want and set quantities\n" ..
+        "4. Open the Auction House, then click |cffffd700Start Search|r\n" ..
+        "5. In Restock mode: open your bank first and click |cffffd700Scan for Restock|r"
     )
 
     Spacer()
@@ -859,6 +1400,7 @@ end
 -- Show the status view  (SEARCHING / READY / CONFIRMING)
 -- ============================================================
 ShowStatusView = function(statusMsg, btnText, btnEnabled, btnHandler)
+    ReleaseCategoryScroll()
     DetachLogFrame()
     sidebarPanel:Hide()
     contentGroup:ReleaseChildren()
@@ -957,13 +1499,22 @@ ns.UpdateUI = UpdateUI
 -- ============================================================
 ns.RefreshToBuyUI = function()
     if ns.state == ns.STATE.IDLE and currentCatIdx ~= LOG_TAB and currentCatIdx ~= ABOUT_TAB then
-        BuildCategoryContent(currentCatIdx)
+        if currentCatIdx == ALL_TAB then
+            BuildAllItemsContent()
+        else
+            BuildCategoryContent(currentCatIdx)
+        end
     end
 end
 
 ns.RefreshProfileUI = function()
+    showAllProfileItems = false
     if ns.state == ns.STATE.IDLE and currentCatIdx ~= LOG_TAB and currentCatIdx ~= ABOUT_TAB then
-        BuildCategoryContent(currentCatIdx)
+        if currentCatIdx == ALL_TAB then
+            BuildAllItemsContent()
+        else
+            BuildCategoryContent(currentCatIdx)
+        end
     end
 end
 
@@ -974,6 +1525,8 @@ mainFrame = CreateFrame("Frame", "GuildBankRestockFrame", UIParent, "BackdropTem
 mainFrame:SetSize(1000, 560)
 mainFrame:SetPoint("CENTER")
 mainFrame:SetMovable(true)
+mainFrame:SetResizable(true)
+mainFrame:SetResizeBounds(600, 380)
 mainFrame:SetClampedToScreen(true)
 mainFrame:SetFrameStrata("MEDIUM")
 mainFrame:SetBackdrop({
@@ -1003,6 +1556,23 @@ titleText:SetText("Guild Bank Restock v" .. _version)
 local closeButton = CreateFrame("Button", nil, mainFrame, "UIPanelCloseButton")
 closeButton:SetPoint("TOPRIGHT", mainFrame, "TOPRIGHT", 2, 2)
 closeButton:SetScript("OnClick", function() mainFrame:Hide() end)
+
+-- Resize grip (bottom-right corner)
+local resizeGrip = CreateFrame("Button", nil, mainFrame)
+resizeGrip:SetSize(16, 16)
+resizeGrip:SetPoint("BOTTOMRIGHT", mainFrame, "BOTTOMRIGHT", -2, 2)
+resizeGrip:SetNormalTexture("Interface/ChatFrame/UI-ChatIM-SizeGrabber-Up")
+resizeGrip:SetHighlightTexture("Interface/ChatFrame/UI-ChatIM-SizeGrabber-Highlight")
+resizeGrip:SetPushedTexture("Interface/ChatFrame/UI-ChatIM-SizeGrabber-Down")
+resizeGrip:RegisterForDrag("LeftButton")
+resizeGrip:SetScript("OnDragStart", function() mainFrame:StartSizing("BOTTOMRIGHT") end)
+resizeGrip:SetScript("OnDragStop", function()
+    mainFrame:StopMovingOrSizing()
+    if ns.addon and ns.addon.db then
+        ns.addon.db.global.windowWidth  = math.floor(mainFrame:GetWidth()  + 0.5)
+        ns.addon.db.global.windowHeight = math.floor(mainFrame:GetHeight() + 0.5)
+    end
+end)
 
 -- Status bar
 statusBar = mainFrame:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
@@ -1034,7 +1604,30 @@ sidebarPanel:SetWidth(120)
 do
     local btnH = 26
     local pad  = 2
-    local y    = -4
+    local ctxH = 22
+
+    -- Context switcher: Guild | Personal (two buttons side-by-side at top of sidebar)
+    guildCtxBtn = CreateFrame("Button", nil, sidebarPanel, "UIPanelButtonTemplate")
+    guildCtxBtn:SetSize(56, ctxH)
+    guildCtxBtn:SetPoint("TOPLEFT", sidebarPanel, "TOPLEFT", 2, -4)
+    guildCtxBtn:SetText("Guild")
+    guildCtxBtn:SetScript("OnClick", function()
+        if ns.context == "guild" then return end
+        ns.SwitchContext("guild")
+        SelectTab(currentCatIdx)
+    end)
+
+    personalCtxBtn = CreateFrame("Button", nil, sidebarPanel, "UIPanelButtonTemplate")
+    personalCtxBtn:SetSize(58, ctxH)
+    personalCtxBtn:SetPoint("TOPLEFT", sidebarPanel, "TOPLEFT", 60, -4)
+    personalCtxBtn:SetText("Personal")
+    personalCtxBtn:SetScript("OnClick", function()
+        if ns.context == "personal" then return end
+        ns.SwitchContext("personal")
+        SelectTab(currentCatIdx)
+    end)
+
+    local y = -(4 + ctxH + 6)
 
     for i, cat in ipairs(CATEGORIES) do
         local btn = CreateFrame("Button", nil, sidebarPanel, "UIPanelButtonTemplate")
@@ -1049,10 +1642,17 @@ do
 
     local aboutBtn = CreateFrame("Button", nil, sidebarPanel, "UIPanelButtonTemplate")
     aboutBtn:SetSize(116, btnH)
-    aboutBtn:SetPoint("BOTTOMLEFT", sidebarPanel, "BOTTOMLEFT", 2, btnH + pad + 4)
+    aboutBtn:SetPoint("BOTTOMLEFT", sidebarPanel, "BOTTOMLEFT", 2, (btnH + pad) * 2 + 4)
     aboutBtn:SetText("About")
     aboutBtn:SetScript("OnClick", function() SelectTab(ABOUT_TAB) end)
     sidebarButtons[ABOUT_TAB] = aboutBtn
+
+    local selectedBtn = CreateFrame("Button", nil, sidebarPanel, "UIPanelButtonTemplate")
+    selectedBtn:SetSize(116, btnH)
+    selectedBtn:SetPoint("BOTTOMLEFT", sidebarPanel, "BOTTOMLEFT", 2, btnH + pad + 4)
+    selectedBtn:SetText("Selected")
+    selectedBtn:SetScript("OnClick", function() SelectTab(ALL_TAB) end)
+    sidebarButtons[ALL_TAB] = selectedBtn
 
     local logBtn = CreateFrame("Button", nil, sidebarPanel, "UIPanelButtonTemplate")
     logBtn:SetSize(116, btnH)
@@ -1072,6 +1672,10 @@ contentGroup.frame:SetPoint("BOTTOMRIGHT", mainFrame, "BOTTOMRIGHT",  -18,  32)
 
 -- SelectTab: highlight active sidebar button and rebuild content
 SelectTab = function(idx)
+    -- Flush any pending edit box value so it isn't lost on tab switch
+    local focused = GetCurrentKeyboardFocus and GetCurrentKeyboardFocus()
+    if focused then focused:ClearFocus() end
+
     for _, btn in pairs(sidebarButtons) do
         btn:SetNormalFontObject(GameFontNormal)
         btn:UnlockHighlight()
@@ -1085,6 +1689,8 @@ SelectTab = function(idx)
         BuildLogContent()
     elseif idx == ABOUT_TAB then
         BuildAboutContent()
+    elseif idx == ALL_TAB then
+        BuildAllItemsContent()
     else
         BuildCategoryContent(idx)
     end
@@ -1097,6 +1703,22 @@ ns.frame = mainFrame  -- raw WoW frame; callers use ns.frame directly (no .frame
 -- Apply saved settings  (called by GBR:OnInitialize)
 -- ============================================================
 ns.ApplySettingsToUI = function()
-    currentRankFilter = ns.addon and ns.addon.db and ns.addon.db.global.rankFilter or nil
-    -- ns.mode, ns.budget, ns.currentProfile already set by LoadSettings
+    local g = ns.addon and ns.addon.db and ns.addon.db.global
+    if g and g.windowWidth and g.windowHeight then
+        mainFrame:SetSize(g.windowWidth, g.windowHeight)
+    end
+    local ctxDB = ns.addon and ns.addon.db and ns.ContextDB and ns.ContextDB()
+    currentRankFilter = ctxDB and ctxDB.rankFilter or nil
+    if guildCtxBtn and personalCtxBtn then
+        local isPersonal = ns.context == "personal"
+        guildCtxBtn:SetNormalFontObject(isPersonal and GameFontNormal or GameFontHighlight)
+        personalCtxBtn:SetNormalFontObject(isPersonal and GameFontHighlight or GameFontNormal)
+        if isPersonal then
+            guildCtxBtn:UnlockHighlight()
+            personalCtxBtn:LockHighlight()
+        else
+            guildCtxBtn:LockHighlight()
+            personalCtxBtn:UnlockHighlight()
+        end
+    end
 end

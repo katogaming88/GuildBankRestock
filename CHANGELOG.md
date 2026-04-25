@@ -2,6 +2,30 @@
 
 All notable changes to GuildBankRestock will be documented here.
 
+## [0.9.1] - 2026-04-25
+
+### Added
+- **Personal mode**: new context (toggled via Guild / Personal buttons at the top of the sidebar) for restocking your own consumables instead of the guild bank — scans bags, personal bank, and warband bank; settings and profiles are stored separately from Guild Bank context
+- **Personal inventory scanning** (`Personal.lua`): "Scan Inventory" button appears in the UI; scans all bag slots, personal bank slots, and warband bank tabs; scan time is displayed in the UI after scanning
+- **Selected tab**: new sidebar entry that shows all checked / profile-included items across every category in a single flat list, so you can review and start a run without switching tabs
+- **Profile inclusion snapshots** (`_inc`): profiles now record which items are included, so switching profiles correctly enables/disables items across all categories
+- **"Add Items" / "Hide Extra" toggle**: in Restock mode with a profile active, a new button lets you temporarily reveal non-profile items so you can check them in and add them to the profile
+- **New category files** (empty, ready to populate): Augment Runes, Food, Vantus Runes
+- **Potions** populated — 16 items (R1/R2 pairs): Light's Potential, Potion of Recklessness, Draught of Rampant Abandon, Potion of Zealotry, Silvermoon Health Potion, Lightfused Mana Potion, Potion of Devoured Dreams, Void-Shrouded Tincture
+- **Flasks** populated — 8 items (R1/R2 pairs): Flask of the Blood Knights, Flask of the Magisters, Flask of the Shattered Sun, Flask of Thalassian Resistance
+
+### Changed
+- Est Run cost, Budget, and Start Search bar moved to the bottom of the frame
+- "In Bank" column header renamed to "In Bags" when in Personal context
+- Select All / Select None now only affect items visible in the current filter (respects profile inclusion and the Add Items toggle)
+- Unchecking an item in Restock mode with an active profile now removes it from the profile's inclusion snapshot and immediately rebuilds the tab
+- `ns.ContextDB()` helper added — all settings reads/writes are now routed through the active context (guild or personal) automatically
+- `ns.GetStock(itemID)` replaces direct `guildBankStock` lookups — returns from the correct stock table based on context
+- Switching profiles now syncs `item.enabled` across all categories to match the profile's inclusion snapshot
+
+### Fixed
+- Pressing Enter to confirm a number field no longer opens the game chat box — the key event was propagating to WoW's global keybinding system
+
 ## [0.9.0] - 2026-04-24
 
 ### Changed

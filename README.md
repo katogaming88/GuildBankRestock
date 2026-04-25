@@ -1,6 +1,6 @@
 # Guild Bank Restock
 
-A World of Warcraft addon that automates buying items from the Auction House using [Auctionator](https://www.curseforge.com/wow/addons/auctionator). Designed for restocking a guild bank with gems, enchants, potions, flasks, and weapon oils/stones.
+A World of Warcraft addon that automates buying items from the Auction House using [Auctionator](https://www.curseforge.com/wow/addons/auctionator). Designed for restocking a guild bank or your own bags with gems, enchants, potions, flasks, and weapon oils/stones.
 
 ## Requirements
 
@@ -16,32 +16,45 @@ A World of Warcraft addon that automates buying items from the Auction House usi
    ```
 3. Launch WoW and enable the addon in the AddOns menu on the character select screen
 
+## Contexts
+
+Use the **Guild** / **Personal** buttons at the top of the sidebar to switch contexts. Each context has its own settings, profiles, and scan data.
+
+- **Guild** — restock the guild bank; scans all guild bank tabs
+- **Personal** — restock your own consumables; scans bags, personal bank, and warband bank
+
 ## Modes
 
-The addon has two operating modes, toggled with the **Bulk** and **Restock** buttons in the main window.
+Each context has two operating modes, toggled with the **Bulk** and **Restock** buttons.
 
 ### Bulk mode
-Buys a fixed quantity of each selected item regardless of what is already in the guild bank. Good for restocking at the start of a new expansion when the bank is empty.
+Buys a fixed quantity of each selected item regardless of what is already in stock. Good for restocking at the start of a new expansion.
 
-1. Type `/restock` to open the window and select **Bulk**
+1. Type `/restock` to open the window, choose **Guild** or **Personal**, and select **Bulk**
 2. Check the items you want and set the **Qty** for each
 3. Open the AH and switch to the **Auctionator Shopping** tab
-4. Click **Start** — the addon searches and queues purchases for every enabled item
+4. Click **Start Search** at the bottom of the frame — the addon searches and queues purchases for every enabled item
 
 ### Restock mode
-Scans the guild bank to determine what is actually needed before buying anything. Requires visiting the guild bank first.
+Scans your stock source (guild bank or personal inventory) to determine what is actually needed before buying anything.
 
-1. Open the guild bank and click the **Scan for Restock** button that appears on the bank UI — the addon queries all tabs and prints "Guild bank scanned." when done
-2. Type `/restock` to open the window and select **Restock**
-3. Create or select a profile using the `+` / `-` / `<` / `>` controls next to the mode buttons
-4. Set a **Target** quantity per item — this is the stock level you want to maintain in the bank
-5. The **To Buy** column is calculated automatically (`Target − in bank`) but can be edited before starting
-6. Optionally use **R1** / **R2** / **Both** to filter ranked items across all tabs
-7. Open the AH and switch to the **Auctionator Shopping** tab
-8. Click **Start** — the addon buys only what is needed to reach your targets; items already fully stocked are skipped
+**Guild Bank:**
+1. Open the guild bank and click the **Scan for Restock** button that appears on the bank UI
+2. Type `/restock`, choose **Guild**, and select **Restock**
+3. Create or select a profile using the `+` / `-` / `<` / `>` controls
+4. Set a **Target** quantity per item — the stock level you want to maintain
+5. The **To Buy** column is calculated automatically (`Target − in bank`) but can be edited
+6. Open the AH and click **Start Search**
+
+**Personal:**
+1. Open your bank and click **Scan Inventory** in the addon window (or click the button that appears on the bank UI)
+2. Choose **Personal** and select **Restock**
+3. Create or select a profile, set **Target** quantities, and click **Start Search**
 
 ### Profiles
-Profiles store per-item target quantities and are saved between sessions. You can have multiple profiles — for example, one per guild or one per content type. Use the `+` button to create a profile, `<` / `>` to cycle between them, and `-` to delete the active one.
+Profiles store per-item target quantities and inclusion state. You can have multiple profiles — for example, one per role or content type. Use `+` to create, `<` / `>` to cycle, `-` to delete, and **Save As** to copy the active profile to a new name.
+
+In Restock mode, use **Add Items** to temporarily reveal non-profile items so you can check them in and add them to the profile.
 
 ### Slash Commands
 
@@ -66,6 +79,9 @@ To add or remove items, edit the relevant file in the `Categories/` folder. Each
 | `Categories/Potions.lua` | Potions |
 | `Categories/Flasks.lua` | Flasks |
 | `Categories/Oils.lua` | Oils |
+| `Categories/Food.lua` | Food |
+| `Categories/AugmentRunes.lua` | Augment Runes |
+| `Categories/VantusRunes.lua` | Vantus Runes |
 
 Items are identified by item ID for reliability across patches. Names are included as comments. Ranked items (R1/R2) carry a `rank` field used by the rank filter buttons.
 
@@ -79,7 +95,7 @@ Categories that use subcategory headers (e.g. Enchants) can include `{ header = 
 
 ## Budget
 
-A per-run gold limit can be set in the `Budget (g):` field in the button bar (next to the rank filter buttons). Set it to `0` (the default) for no limit.
+A per-run gold limit can be set in the `Budget (g):` field at the bottom of the frame. Set it to `0` (the default) for no limit.
 
 When the budget is reached mid-run, the addon pauses and returns to the main window. It prints:
 - Total gold spent for the run (broken down to gold/silver/copper)
@@ -115,5 +131,7 @@ This downloads the required Ace3 libraries (LibStub, CallbackHandler-1.0, AceAdd
 - In Restock mode, click **Scan for Restock** on the guild bank UI before heading to the AH — scanning is always manual and never happens automatically
 - The addon will stop automatically if a purchase fails (e.g. insufficient gold)
 - The window is movable and can be closed with ESC
-- Navigation uses a left-side sidebar: category buttons at the top, Log and About pinned to the bottom
-- Item states, quantities, rank filter, active mode, active profile, and the activity log are all saved automatically and restored on login
+- Navigation uses a left-side sidebar: Guild/Personal context switcher at the top, category buttons below, Selected/Log/About pinned to the bottom
+- Guild Bank and Personal contexts each have independent item settings and profiles
+- The **Selected** tab shows all currently checked / profile-included items across every category in one flat list
+- Item states, quantities, rank filter, active mode, active profile, active context, and the activity log are all saved automatically and restored on login
