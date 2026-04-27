@@ -122,6 +122,16 @@ bash fetch-libs.sh
 
 This downloads the required Ace3 libraries (LibStub, CallbackHandler-1.0, AceAddon-3.0, AceDB-3.0, AceConsole-3.0, AceEvent-3.0, AceGUI-3.0) from GitHub. The script is idempotent — it skips any library already present. Packaged releases bundle the libraries automatically.
 
+## Versioning
+
+Versions follow `*.0.0 / 0.*.0 / 0.0.*`:
+
+| Segment | Bumped when… |
+|---|---|
+| `*.0.0` | SavedVariables schema change (resets profiles), new or removed dependency, new restocking target type (e.g. guild bank → personal bank), major UI overhaul, or stable milestone release |
+| `0.*.0` | New item category tab, new filter type, new UI surface or panel, new supported game mode |
+| `0.0.*` | New item IDs added to existing categories, bug fixes, `.toc` interface version bumps, UX polish |
+
 ## Notes
 
 - Uses [Ace3](https://www.wowace.com/projects/ace3) (AceAddon, AceDB, AceConsole, AceEvent, AceGUI) — libraries are bundled with the addon; run `fetch-libs.sh` for development
