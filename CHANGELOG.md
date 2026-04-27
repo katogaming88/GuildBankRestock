@@ -2,6 +2,11 @@
 
 All notable changes to GuildBankRestock will be documented here.
 
+## [0.9.6] - 2026-04-27
+
+### Added
+- **Gems R1 entries**: all 20 gem cuts now have R1 counterparts (ID = R2 − 1) listed above their R2 entry — covers Eversong Diamonds, Lapis, Amethyst, Peridot, and Garnet cuts
+
 ## [0.9.5] - 2026-04-27
 
 ### Added
