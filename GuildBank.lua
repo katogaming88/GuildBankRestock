@@ -10,6 +10,10 @@ local scanBar
 local scanEventFrame = CreateFrame("Frame")
 
 local function DoScan()
+    if not GuildBankFrame or not GuildBankFrame:IsShown() then
+        ns.Print("Open the guild bank first.")
+        return
+    end
     ns.Print("Scanning guild bank...")
     wipe(ns.guildBankStock)
 
@@ -25,7 +29,7 @@ local function DoScan()
             if link then
                 local itemID = tonumber(link:match("item:(%d+)"))
                 if itemID then
-                    local _, _, count = GetGuildBankItemInfo(currentTab, slot)
+                    local _, count = GetGuildBankItemInfo(currentTab, slot)
                     ns.guildBankStock[itemID] = (ns.guildBankStock[itemID] or 0) + (count or 1)
                 end
             end
@@ -55,6 +59,7 @@ local function DoScan()
                     if scanBtn then scanBtn:SetText("Scan for Restock") end
                 end)
             end
+            if ns.FlashSidebarScanDone then ns.FlashSidebarScanDone() end
             return
         end
         currentTab = table.remove(queue, 1)
@@ -71,6 +76,9 @@ local function DoScan()
 
     ScanNext()
 end
+
+-- Exposed so the sidebar Scan Guild Bank button can call it directly
+ns.DoGuildBankScan = DoScan
 
 local function OnBankOpened()
     if not GuildBankFrame then
