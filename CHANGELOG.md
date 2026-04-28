@@ -2,6 +2,11 @@
 
 All notable changes to GuildBankRestock will be documented here.
 
+## [Unreleased]
+
+### Changed
+- **internal:** consolidated per-search-run state wipe (`ns.activeItems` / `ns.boughtIndices` / `ns.skippedIndices` / `ns.resultRows`) into a `ResetSearchState()` helper called by both `ns.Reset` and `ns.StartSearch`. Future search-state fields only need to be remembered in one place. No behavior change
+
 ## [0.9.9] - 2026-04-28
 
 ### Added

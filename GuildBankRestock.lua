@@ -103,6 +103,20 @@ local function diag(msg)
     ns.Log("[diag] " .. msg, 1, 1, 0.5)
 end
 
+-- Wipes all per-search-run state. Called from both ns.Reset and ns.StartSearch
+-- so adding a new search-state field only requires updating one place.
+-- Does NOT touch ns.searchGen, ns.state, ns.pending*, or the listener registration;
+-- those are managed separately by their own lifecycle, and the searchGen *increment*
+-- (not wipe) is what gives the token its meaning. MapResultRows also wipes
+-- ns.resultRows independently as part of its result-mapping contract; that wipe
+-- is unrelated and intentionally left alone.
+local function ResetSearchState()
+    wipe(ns.activeItems)
+    wipe(ns.boughtIndices)
+    wipe(ns.skippedIndices)
+    wipe(ns.resultRows)
+end
+
 local function UnregisterListener()
     if ns.listenerRegistered then
         Auctionator.EventBus:Unregister(ns.listener, { Auctionator.Shopping.Tab.Events.SearchEnd })
@@ -133,10 +147,7 @@ function ns.Reset()
     ns.pendingListPos = nil
     ns.pendingItemID  = nil
     ns.pendingQty     = nil
-    wipe(ns.activeItems)
-    wipe(ns.resultRows)
-    wipe(ns.boughtIndices)
-    wipe(ns.skippedIndices)
+    ResetSearchState()
 end
 
 function ns.ContextDB()
@@ -271,10 +282,7 @@ ns.StartSearch = function()
         return
     end
 
-    wipe(ns.activeItems)
-    wipe(ns.boughtIndices)
-    wipe(ns.skippedIndices)
-    wipe(ns.resultRows)
+    ResetSearchState()
 
     if ns.mode == "restock" then
         if not ns.currentProfile then
