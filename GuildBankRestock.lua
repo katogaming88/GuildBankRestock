@@ -273,6 +273,7 @@ ns.StartSearch = function()
 
     wipe(ns.activeItems)
     wipe(ns.boughtIndices)
+    wipe(ns.skippedIndices)
     wipe(ns.resultRows)
 
     if ns.mode == "restock" then
