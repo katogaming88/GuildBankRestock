@@ -53,3 +53,24 @@ jobs:
         with:
           files: ../GuildBankRestock.zip
           body_path: release_notes.md
+
+      - name: Upload to CurseForge
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+        run: |
+          GAME_VERSION_ID=$(curl -sf \
+            -H "X-Api-Token: $CF_API_KEY" \
+            "https://wow.curseforge.com/api/game/versions" \
+            | jq '[.[] | select(.gameVersionTypeID == 517)] | sort_by(.id) | last | .id')
+
+          METADATA=$(jq -n \
+            --arg changelog "$(cat release_notes.md)" \
+            --arg tag "${GITHUB_REF_NAME}" \
+            --argjson gv "$GAME_VERSION_ID" \
+            '{changelog: $changelog, changelogType: "markdown", displayName: $tag, gameVersions: [$gv], releaseType: "release"}')
+
+          curl -sf \
+            -H "X-Api-Token: $CF_API_KEY" \
+            -F "metadata=$METADATA" \
+            -F "file=@../GuildBankRestock.zip" \
+            "https://wow.curseforge.com/api/projects/1526978/upload-file"
