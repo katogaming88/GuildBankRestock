@@ -2,6 +2,16 @@
 
 All notable changes to GuildBankRestock will be documented here.
 
+## [0.9.9] - 2026-04-28
+
+### Added
+- AH search path now has **log-only diagnostic instrumentation** (no chat noise). Traces async name resolution start, stale `ContinueOnItemLoad` callbacks, `DoSearch` firing, EventBus event reception, and ignored events with reasons. Entries are visible in the Log tab and exportable, so future bugs in the search flow are debuggable from the user's log without needing fresh instrumentation
+
+### Fixed
+- Uncached items in the **Item-name sort** now sink to the bottom instead of floating to the top. Previously, items whose names hadn't loaded into WoW's item cache yet fell back to `tostring(item.id)` as the sort key; numeric IDs sort before letters in ASCII, so they appeared above every letter-named row in an A→Z sort. Returning `nil` instead routes them through the existing nil-sinks-to-bottom comparator, matching how unpriced rows behave in the Mkt Price / Est g sorts
+- `skippedIndices` is now wiped in `StartSearch` alongside `boughtIndices`. In the normal flow `Reset()` runs first and clears both, so this wasn't a live bug — but the asymmetry meant any future code path calling `StartSearch` without `Reset` would carry stale entries into the new run, causing `GetNextItem` to incorrectly skip those list positions
+- Bulk-set tooltip and empty-result error wording unified around **"ticked"**. The tooltip previously said "Uncheck the rows you want to skip" (implying rows start checked) while the error said "Tick the rows you want to set" (implying they start unchecked), contradicting each other. Both messages now describe inclusion symmetrically: tick to include, untick to exclude
+
 ## [0.9.8] - 2026-04-27
 
 ### Fixed
