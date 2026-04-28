@@ -139,12 +139,50 @@ UpdateUI = function()
     elseif ns.state == ns.STATE.READY then
         local listPos, ref = ns.GetNextItem()
         if not listPos then
-            SetStatusText("|cff00ff00All items purchased!|r")
+            -- GetNextItem returns nil when every active item has terminated: bought,
+            -- price-skipped, or never had an AH listing. Surface each category separately
+            -- so "Bought X" doesn't include items the user actually skipped on price.
+            local bought, skipped, notFound = 0, 0, 0
+            for i = 1, #ns.activeItems do
+                if ns.boughtIndices[i] then
+                    bought = bought + 1
+                elseif ns.skippedIndices[i] then
+                    skipped = skipped + 1
+                elseif not ns.resultRows[i] then
+                    notFound = notFound + 1
+                end
+            end
+            local parts, logParts = {}, {}
+            if bought > 0 then
+                parts[#parts + 1] = string.format("|cff00ff00Bought %d.|r", bought)
+                logParts[#logParts + 1] = string.format("Bought %d.", bought)
+            end
+            if skipped > 0 then
+                parts[#parts + 1] = string.format("|cffffaa00%d skipped (price).|r", skipped)
+                logParts[#logParts + 1] = string.format("%d skipped (price).", skipped)
+            end
+            if notFound > 0 then
+                parts[#parts + 1] = string.format("|cffffaa00%d not found on AH.|r", notFound)
+                logParts[#logParts + 1] = string.format("%d not found on AH.", notFound)
+            end
+            local msg, logMsg
+            if bought > 0 and skipped == 0 and notFound == 0 then
+                msg, logMsg = "|cff00ff00All items purchased!|r", "All items purchased."
+            elseif bought == 0 and skipped == 0 and notFound > 0 then
+                msg = string.format("|cffffaa00No listings found on AH.|r\n%d item(s) unavailable — try later.", notFound)
+                logMsg = string.format("No listings found on AH. %d item(s) unavailable.", notFound)
+            elseif #parts > 0 then
+                msg = table.concat(parts, " ")
+                logMsg = table.concat(logParts, " ")
+            else
+                msg, logMsg = "|cff00ff00Done.|r", "Done."
+            end
+            SetStatusText(msg)
             ShowStatusView(
-                "|cff00ff00All items purchased!|r",
+                msg,
                 "Close", true,
                 function()
-                    ns.Log("All items purchased.", 0.4, 1, 0.4)
+                    ns.Log(logMsg, 0.4, 1, 0.4)
                     suppressStopMessage = true
                     ns.Reset()
                     mainFrame:Hide()
@@ -161,7 +199,9 @@ UpdateUI = function()
                 local msg = "Skipped " .. itemName .. ": " .. actualGold .. "g/ea exceeds max " .. item.maxPrice .. "g."
                 ns.Print(msg)
                 ns.Log(msg, 1, 0.82, 0)
-                ns.boughtIndices[listPos] = true
+                -- skippedIndices (not boughtIndices) so the final summary reports this
+                -- item as skipped rather than inflating the "Bought N" count.
+                ns.skippedIndices[listPos] = true
                 UpdateUI()
                 return
             end
@@ -263,12 +303,13 @@ _G["GuildBankRestockMainFrame"] = mainFrame
 tinsert(UISpecialFrames, "GuildBankRestockMainFrame")
 
 mainFrame:HookScript("OnHide", function()
-    if not suppressStopMessage then
-        ns.Reset()
-        ns.Print("Stopped.")
-        ns.Log("Stopped.", 1, 0.6, 0.6)
+    if suppressStopMessage then
+        suppressStopMessage = false
+        return
     end
-    suppressStopMessage = false
+    ns.Reset()
+    ns.Print("Stopped.")
+    ns.Log("Stopped.", 1, 0.6, 0.6)
 end)
 
 mainFrame:Hide()

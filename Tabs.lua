@@ -109,6 +109,17 @@ local function BuildItemsContent(catIdx)
         if isAllItems then BuildAllItemsContent() else BuildCategoryContent(catIdx) end
     end
 
+    -- Tri-state column sort: nil → asc → desc → nil. Session-only (lives on `ui`).
+    local function CycleSort(col)
+        if ui.sortCol ~= col then
+            ui.sortCol, ui.sortDir = col, "asc"
+        elseif ui.sortDir == "asc" then
+            ui.sortDir = "desc"
+        else
+            ui.sortCol, ui.sortDir = nil, "asc"
+        end
+    end
+
     local function AddBtn(parent, text, width, onClick)
         local btn = AceGUI:Create("Button")
         btn:SetText(text)
@@ -127,49 +138,30 @@ local function BuildItemsContent(catIdx)
     headerRow:SetLayout("Flow")
     headerRow:SetFullWidth(true)
 
-    local itemHeader = AceGUI:Create("Label")
-    itemHeader:SetText(C_GOLD .. "Item|r")
-    itemHeader:SetRelativeWidth(ns.mode == "restock" and 0.27 or 0.38)
-    headerRow:AddChild(itemHeader)
-
-    if ns.mode == "restock" then
-        local th = AceGUI:Create("Label")
-        th:SetText(C_GOLD .. "Target|r")
-        th:SetRelativeWidth(0.07)
-        headerRow:AddChild(th)
-
-        local ibh = AceGUI:Create("Label")
-        ibh:SetText(C_GOLD .. (ns.context == "personal" and "In Bags" or "In Bank") .. "|r")
-        ibh:SetRelativeWidth(0.07)
-        headerRow:AddChild(ibh)
-
-        local bh = AceGUI:Create("Label")
-        bh:SetText(C_GOLD .. "To Buy|r")
-        bh:SetRelativeWidth(0.07)
-        headerRow:AddChild(bh)
-    else
-        local qh = AceGUI:Create("Label")
-        qh:SetText(C_GOLD .. "Qty|r")
-        qh:SetRelativeWidth(0.10)
-        headerRow:AddChild(qh)
+    local function MakeSortHeader(text, colId, relWidth, justify)
+        local lbl = AceGUI:Create("InteractiveLabel")
+        local glyph = (ui.sortCol == colId) and (ui.sortDir == "asc" and " ^" or " v") or ""
+        lbl:SetText(C_GOLD .. text .. glyph .. "|r")
+        lbl:SetRelativeWidth(relWidth)
+        if justify and lbl.label then lbl.label:SetJustifyH(justify) end
+        lbl:SetCallback("OnClick", function() CycleSort(colId); rebuild() end)
+        headerRow:AddChild(lbl)
+        return lbl
     end
 
-    local mkth = AceGUI:Create("Label")
-    mkth:SetText(C_GOLD .. "Mkt Price|r")
-    mkth:SetRelativeWidth(0.13)
-    mkth.label:SetJustifyH("CENTER")
-    headerRow:AddChild(mkth)
+    MakeSortHeader("Item", "name", ns.mode == "restock" and 0.27 or 0.38)
 
-    local esth = AceGUI:Create("Label")
-    esth:SetText(C_GOLD .. "Est g|r")
-    esth:SetRelativeWidth(0.12)
-    esth.label:SetJustifyH("CENTER")
-    headerRow:AddChild(esth)
+    if ns.mode == "restock" then
+        MakeSortHeader("Target", "target", 0.07)
+        MakeSortHeader(ns.context == "personal" and "In Bags" or "In Bank", "inbank", 0.07)
+        MakeSortHeader("To Buy", "tobuy", 0.07)
+    else
+        MakeSortHeader("Qty", "qty", 0.10)
+    end
 
-    local mgh = AceGUI:Create("Label")
-    mgh:SetText(C_GOLD .. "Max g|r")
-    mgh:SetRelativeWidth(0.12)
-    headerRow:AddChild(mgh)
+    MakeSortHeader("Mkt Price", "mkt", 0.13, "CENTER")
+    MakeSortHeader("Est g",     "est", 0.12, "CENTER")
+    MakeSortHeader("Max g",     "max", 0.12)
 
     -- ── Button bar ────────────────────────────────────────────
     local btnBar = AceGUI:Create("SimpleGroup")
@@ -249,6 +241,76 @@ local function BuildItemsContent(catIdx)
         end
         rebuild()
     end)
+
+    -- ── Bulk-set: applies one number to all currently visible items ──
+    local bulkApplyLabel = ns.mode == "restock" and "Set Target" or "Set Qty"
+    local bulkSetBox = AceGUI:Create("EditBox")
+    bulkSetBox:SetWidth(50)
+    bulkSetBox:SetLabel("")
+    bulkSetBox:SetText("")
+    bulkSetBox:DisableButton(true)
+    bulkSetBox:SetMaxLetters(5)
+    bulkSetBox:SetCallback("OnEnter", function(widget)
+        GameTooltip:SetOwner(widget.editbox, "ANCHOR_RIGHT")
+        GameTooltip:SetText("Bulk-set value.\nPress " .. bulkApplyLabel .. " (or Enter) to apply\nto every item that is both visible in this tab\nAND currently checked. Uncheck the rows you want to skip.", 1, 1, 1)
+        GameTooltip:Show()
+    end)
+    bulkSetBox:SetCallback("OnLeave", function() GameTooltip:Hide() end)
+
+    local function ApplyBulkSet()
+        local v = tonumber(bulkSetBox:GetText())
+        if not v then return end
+        if ns.mode == "restock" and not ns.currentProfile then
+            ns.Print("No profile selected — create one with the + button.")
+            return
+        end
+
+        local function ApplyOne(ci, ii, it)
+            if ns.mode == "restock" then
+                local val = math.max(0, math.floor(v))
+                ns.SetProfileTarget(ci, ii, val)
+                ns.toBuy[ci .. "_" .. ii] = math.max(0, val - ns.GetStock(it.id))
+            else
+                it.qty = math.max(1, math.floor(v))
+                ns.SaveItem(ci, ii)
+            end
+        end
+
+        local applied = 0
+        if isAllItems then
+            for ci, ccat in ipairs(CATEGORIES) do
+                for ii, item2 in ipairs(ccat.items) do
+                    if not item2.header and item2.enabled then
+                        local rankOk = not item2.rank or ui.currentRankFilter == nil or item2.rank == ui.currentRankFilter
+                        if rankOk then
+                            local visible
+                            if ns.mode == "restock" and ns.currentProfile then
+                                visible = ns.IsProfileIncluded(ci, ii) or ui.showAllProfileItems
+                            else
+                                visible = true  -- enabled already implies visible in non-restock/no-profile All Items
+                            end
+                            if visible then ApplyOne(ci, ii, item2); applied = applied + 1 end
+                        end
+                    end
+                end
+            end
+        else
+            for ii, item2 in ipairs(cat.items) do
+                if not item2.header and item2.enabled then
+                    local rankOk = not item2.rank or ui.currentRankFilter == nil or item2.rank == ui.currentRankFilter
+                    if rankOk then ApplyOne(catIdx, ii, item2); applied = applied + 1 end
+                end
+            end
+        end
+        if applied == 0 then
+            ns.Print("No checked items in view — tick the rows you want to set.")
+        end
+        rebuild()
+    end
+
+    bulkSetBox:SetCallback("OnEnterPressed", function() ApplyBulkSet() end)
+    btnBar:AddChild(bulkSetBox)
+    AddBtn(btnBar, bulkApplyLabel, nil, ApplyBulkSet)
 
     local r1Btn  = AddBtn(btnBar, RankLabel("Rank 1",    1),   nil, function() ui.currentRankFilter = 1;   ns.SaveRankFilter(1);   rebuild() end)
     local r2Btn  = AddBtn(btnBar, RankLabel("Rank 2",    2),   nil, function() ui.currentRankFilter = 2;   ns.SaveRankFilter(2);   rebuild() end)
@@ -412,6 +474,44 @@ local function BuildItemsContent(catIdx)
         end
     end
 
+    -- ── Sort entries (when a column is active, drop heading rows) ──
+    if ui.sortCol then
+        local rows = {}
+        for _, e in ipairs(entries) do
+            if not e.heading then rows[#rows + 1] = e end
+        end
+
+        local function sortKey(e)
+            local it, ci, ii = e.item, e.catIdx, e.itemIdx
+            local col = ui.sortCol
+            if col == "name"   then return (GetItemInfo(it.id) or tostring(it.id)):lower() end
+            if col == "target" then return ns.GetProfileTarget(ci, ii) end
+            if col == "inbank" then return ns.GetStock(it.id) end
+            if col == "tobuy"  then return ns.toBuy[ci .. "_" .. ii] or 0 end
+            if col == "qty"    then return it.qty or 1 end
+            if col == "mkt"    then return GetTSMPrice(it.id) end
+            if col == "est"    then
+                local p = GetTSMPrice(it.id)
+                if not p then return nil end
+                local q = ns.mode == "restock" and (ns.toBuy[ci .. "_" .. ii] or 0) or (it.qty or 1)
+                return p * q
+            end
+            if col == "max"    then return it.maxPrice or 0 end
+        end
+
+        table.sort(rows, function(a, b)
+            local ka, kb = sortKey(a), sortKey(b)
+            -- nil values always sink to the bottom regardless of direction
+            if ka == nil and kb == nil then return false end
+            if ka == nil then return false end
+            if kb == nil then return true end
+            if ka == kb then return false end
+            if ui.sortDir == "asc" then return ka < kb else return ka > kb end
+        end)
+
+        entries = rows
+    end
+
     -- ── Render entries ────────────────────────────────────────
     local editBoxes = {}
     local anyItems  = false
@@ -453,8 +553,8 @@ local function BuildItemsContent(catIdx)
                 ns.SaveItem(ci, ii)
                 if ns.mode == "restock" and ns.currentProfile then
                     ns.SetProfileIncluded(ci, ii, val)
-                    if not val then rebuild() end
                 end
+                rebuild()
             end)
             cb:SetCallback("OnEnter", function(widget)
                 if widget.itemLink then
@@ -472,7 +572,7 @@ local function BuildItemsContent(catIdx)
                 targetBox:SetLabel("")
                 targetBox:SetText(tostring(ns.GetProfileTarget(ci, ii)))
                 targetBox:DisableButton(true)
-                targetBox:SetMaxLetters(3)
+                targetBox:SetMaxLetters(5)
                 targetBox:SetCallback("OnEnter", function(widget)
                     GameTooltip:SetOwner(widget.editbox, "ANCHOR_RIGHT")
                     GameTooltip:SetText("Target quantity to keep in stock.", 1, 1, 1)
@@ -485,7 +585,7 @@ local function BuildItemsContent(catIdx)
                 inBankBox:SetLabel("")
                 inBankBox:SetText(tostring(ns.GetStock(item.id)))
                 inBankBox:DisableButton(true)
-                inBankBox:SetMaxLetters(3)
+                inBankBox:SetMaxLetters(5)
                 inBankBox:SetDisabled(true)
 
                 local toBuyBox = AceGUI:Create("EditBox")
@@ -493,7 +593,7 @@ local function BuildItemsContent(catIdx)
                 toBuyBox:SetLabel("")
                 toBuyBox:SetText(tostring(ns.toBuy[ci .. "_" .. ii] or 0))
                 toBuyBox:DisableButton(true)
-                toBuyBox:SetMaxLetters(3)
+                toBuyBox:SetMaxLetters(5)
                 toBuyBox:SetCallback("OnEnter", function(widget)
                     GameTooltip:SetOwner(widget.editbox, "ANCHOR_RIGHT")
                     GameTooltip:SetText("Amount to buy.\nAuto-calculated from Target minus current stock.\nCan be overridden manually.", 1, 1, 1)
@@ -503,11 +603,24 @@ local function BuildItemsContent(catIdx)
 
                 local function ApplyTarget(text)
                     local v = math.max(0, tonumber(text) or 0)
+                    local prev = ns.GetProfileTarget(ci, ii)
                     targetBox:SetText(tostring(v))
                     ns.SetProfileTarget(ci, ii, v)
                     local needed = math.max(0, v - ns.GetStock(item.id))
                     ns.toBuy[ci .. "_" .. ii] = needed
                     toBuyBox:SetText(tostring(needed))
+                    -- Rebuild so the Est Run total at the bottom reflects the new
+                    -- target/toBuy. Skip rebuild on focus-loss when nothing changed
+                    -- to avoid clobbering an in-progress click on another widget.
+                    if v ~= prev then rebuild() end
+                end
+
+                local function ApplyToBuy(text)
+                    local v = math.max(0, tonumber(text) or 0)
+                    local prev = ns.toBuy[ci .. "_" .. ii] or 0
+                    if v == prev then return end
+                    ns.toBuy[ci .. "_" .. ii] = v
+                    rebuild()
                 end
 
                 targetBox:SetCallback("OnEnterPressed", function(_, _, text)
@@ -517,9 +630,10 @@ local function BuildItemsContent(catIdx)
                     ApplyTarget(widget:GetText())
                 end)
                 toBuyBox:SetCallback("OnEnterPressed", function(_, _, text)
-                    local v = math.max(0, tonumber(text) or 0)
-                    ns.toBuy[ci .. "_" .. ii] = v
-                    rebuild()
+                    ApplyToBuy(text)
+                end)
+                toBuyBox:SetCallback("OnEditFocusLost", function(widget)
+                    ApplyToBuy(widget:GetText())
                 end)
 
                 rowGroup:AddChild(targetBox)
@@ -532,15 +646,18 @@ local function BuildItemsContent(catIdx)
                 qty:SetRelativeWidth(0.10)
                 qty:SetLabel("")
                 qty:SetText(tostring(item.qty))
-                qty:SetMaxLetters(3)
+                qty:SetMaxLetters(5)
                 qty:DisableButton(true)
-                qty:SetCallback("OnEnterPressed", function(_, _, text)
+                local function ApplyQty(text)
                     local v = tonumber(text) or 1
                     if v < 1 then v = 1 end
+                    if v == item.qty then return end
                     item.qty = v
                     ns.SaveItem(ci, ii)
                     rebuild()
-                end)
+                end
+                qty:SetCallback("OnEnterPressed", function(_, _, text) ApplyQty(text) end)
+                qty:SetCallback("OnEditFocusLost", function(widget) ApplyQty(widget:GetText()) end)
                 rowGroup:AddChild(qty)
                 editBoxes[#editBoxes + 1] = qty.editbox
             end
@@ -726,7 +843,7 @@ BuildLogContent = function()
 
     logExportBtn:SetParent(content)
     logExportBtn:ClearAllPoints()
-    logExportBtn:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", 0, 0)
+    logExportBtn:SetPoint("BOTTOMRIGHT", content, "BOTTOMRIGHT", -20, 0)
     logExportBtn:Show()
 
     local max = logFrame:GetMaxScrollRange() or 0

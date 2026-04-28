@@ -155,8 +155,24 @@ do
     sidebarScanBtn:SetPoint("TOPLEFT", sidebarScanRow, "TOPLEFT", 0, 0)
     sidebarScanBtn:SetText("Scan Inventory")
     sidebarScanBtn:SetScript("OnClick", function()
-        if ns.DoPersonalScan then ns.DoPersonalScan() end
+        if ns.context == "personal" then
+            if ns.DoPersonalScan then ns.DoPersonalScan() end
+        else
+            if ns.DoGuildBankScan then ns.DoGuildBankScan() end
+        end
     end)
+
+    -- Flash "Scanned!" on the sidebar button after a successful scan,
+    -- mirroring the bank-attached button's feedback. Restores the
+    -- context-appropriate label after 2 seconds.
+    ns.FlashSidebarScanDone = function()
+        if not sidebarScanBtn then return end
+        sidebarScanBtn:SetText("Scanned!")
+        C_Timer.After(2, function()
+            if not sidebarScanBtn then return end
+            sidebarScanBtn:SetText(ns.context == "personal" and "Scan Inventory" or "Scan Guild Bank")
+        end)
+    end
 
     sidebarScanStatus = sidebarScanRow:CreateFontString(nil, "OVERLAY", "GameFontNormalSmall")
     sidebarScanStatus:SetPoint("TOPLEFT", sidebarScanRow, "TOPLEFT", 2, -22)
@@ -263,6 +279,7 @@ RefreshSidebar = function()
         else
             sidebarScanStatus:SetText(C_ORANGE .. "Not scanned|r")
         end
+        sidebarScanBtn:SetText("Scan Inventory")
         sidebarScanBtn:Show()
     else
         if ns.guildBankScanned and ns.guildBankScanTime then
@@ -272,7 +289,8 @@ RefreshSidebar = function()
         else
             sidebarScanStatus:SetText(C_ORANGE .. "Not scanned|r")
         end
-        sidebarScanBtn:Hide()
+        sidebarScanBtn:SetText("Scan Guild Bank")
+        sidebarScanBtn:Show()
     end
     sidebarScanRow:ClearAllPoints()
     sidebarScanRow:SetPoint("TOPLEFT", sidebarPanel, "TOPLEFT", 2, y)

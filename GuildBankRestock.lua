@@ -55,6 +55,8 @@ ns.state              = ns.STATE.IDLE
 ns.activeItems        = {}
 ns.resultRows         = {}
 ns.boughtIndices      = {}
+ns.skippedIndices     = {}
+ns.searchGen          = 0
 ns.pendingListPos     = nil
 ns.pendingItemID      = nil
 ns.pendingQty         = nil
@@ -82,13 +84,12 @@ function ns.Print(msg)
 end
 
 function ns.Log(msg, r, g, b)
+    -- After OnInitialize, ns.log is aliased to ns.addon.db.global.log (same table reference),
+    -- so a single append covers both the in-memory and saved-vars views. Pre-init we still
+    -- have the original empty table so logs aren't dropped if anything fires before AceDB sets up.
     local fullMsg = "[" .. date("%m/%d %H:%M:%S") .. "] " .. msg
     ns.log[#ns.log + 1] = { msg = fullMsg, r = r, g = g, b = b }
-    if ns.addon and ns.addon.db then
-        local dbLog = ns.addon.db.global.log
-        dbLog[#dbLog + 1] = { msg = fullMsg, r = r, g = g, b = b }
-        if #dbLog > 500 then table.remove(dbLog, 1) end
-    end
+    if #ns.log > 500 then table.remove(ns.log, 1) end
     if ns.AppendLogEntry then
         ns.AppendLogEntry(fullMsg, r, g, b)
     end
@@ -103,6 +104,23 @@ end
 
 function ns.Reset()
     UnregisterListener()
+    -- If we initiated a search and it's still in flight on Auctionator's side, abort it.
+    -- Just unregistering our listener doesn't stop Auctionator — its SearchProvider keeps
+    -- querying the AH and would eventually fire SearchEnd into a stale state (or, if the
+    -- user re-clicks Start Search before the old search ends, our newly-registered
+    -- listener could receive the OLD search's results). Only stop when we know the search
+    -- is ours (state == SEARCHING) so we don't kill a manual user-initiated search that
+    -- happens to be running in the Auctionator window.
+    if (ns.state == ns.STATE.SEARCHING or ns.state == ns.STATE.READY)
+       and AuctionatorShoppingFrame and AuctionatorShoppingFrame.StopSearch then
+        AuctionatorShoppingFrame:StopSearch()
+    end
+    -- Bump the search generation to invalidate any in-flight async name-load callbacks.
+    -- Cancelled callbacks compare ns.searchGen against a captured `thisGen` and drop their
+    -- results when the values disagree. Without this, a close-and-restart while names are
+    -- still loading would let stale callbacks decrement the previous run's `pending` and
+    -- fire FireAuctionatorSearch with a names array that no longer matches activeItems.
+    ns.searchGen = (ns.searchGen or 0) + 1
     ns.state          = ns.STATE.IDLE
     ns.pendingListPos = nil
     ns.pendingItemID  = nil
@@ -110,6 +128,7 @@ function ns.Reset()
     wipe(ns.activeItems)
     wipe(ns.resultRows)
     wipe(ns.boughtIndices)
+    wipe(ns.skippedIndices)
 end
 
 function ns.ContextDB()
@@ -133,27 +152,42 @@ function ns.SwitchContext(newContext)
     if ns.RecalculateToBuy then ns.RecalculateToBuy() end
 end
 
-function ns.BuildSearchStrings()
+function ns.BuildSearchStrings(names)
+    -- Auctionator.API.v1.ConvertToSearchString validates that term.searchString is a string
+    -- (the item NAME). Passing itemID is silently ignored. Caller resolves IDs to names
+    -- via Item:CreateFromItemID():ContinueOnItemLoad(...) before calling us.
     local list = {}
-    for _, ref in ipairs(ns.activeItems) do
+    for i, ref in ipairs(ns.activeItems) do
         local item = CATEGORIES[ref.catIdx].items[ref.itemIdx]
-        local s = Auctionator.API.v1.ConvertToSearchString(ADDON_NAME, {
-            itemID  = item.id,
-            isExact = true,
+        local name = names and names[i] or C_Item.GetItemInfo(item.id)
+        if not name then
+            error("Item name not loaded for #" .. i .. " (id=" .. tostring(item.id) .. ")")
+        end
+        local ok, s = pcall(Auctionator.API.v1.ConvertToSearchString, ADDON_NAME, {
+            searchString = name,
+            isExact      = true,
         })
+        if not ok then
+            error("ConvertToSearchString failed on item #" .. i .. " (id=" .. tostring(item.id) .. " name=" .. tostring(name) .. "): " .. tostring(s))
+        end
         list[#list + 1] = s
     end
     return list
 end
 
-function ns.MapResultRows()
+function ns.MapResultRows(results)
+    -- Auctionator fires SearchEnd with the full results array as the event payload,
+    -- BEFORE its own DataProvider has finished processing them. Reading from
+    -- AuctionatorShoppingFrame.ResultsListing.dataProvider here returns stale or empty
+    -- data because AppendEntries only queues to entriesToProcess; cachedResults is
+    -- populated across subsequent OnUpdate frames. The event payload bypasses that
+    -- lag and is what we actually want.
     wipe(ns.resultRows)
-    local dataProvider = AuctionatorShoppingFrame.ResultsListing.dataProvider
-    for i = 1, dataProvider:GetCount() do
-        local row = dataProvider:GetEntryAt(i)
+    if not results then return end
+    for _, row in ipairs(results) do
         for listPos, ref in ipairs(ns.activeItems) do
             local item = CATEGORIES[ref.catIdx].items[ref.itemIdx]
-            if row.itemKey.itemID == item.id then
+            if row.itemKey and row.itemKey.itemID == item.id then
                 ns.resultRows[listPos] = row
                 break
             end
@@ -163,7 +197,9 @@ end
 
 function ns.GetNextItem()
     for listPos, ref in ipairs(ns.activeItems) do
-        if not ns.boughtIndices[listPos] and ns.resultRows[listPos] then
+        if not ns.boughtIndices[listPos]
+           and not ns.skippedIndices[listPos]
+           and ns.resultRows[listPos] then
             return listPos, ref
         end
     end
@@ -278,14 +314,61 @@ ns.StartSearch = function()
     end
 
     Auctionator.EventBus:RegisterSource(ns.listener, ADDON_NAME)
-    Auctionator.EventBus:Register(ns.listener, { Auctionator.Shopping.Tab.Events.SearchEnd })
+    local searchEndEvent = Auctionator.Shopping and Auctionator.Shopping.Tab
+        and Auctionator.Shopping.Tab.Events and Auctionator.Shopping.Tab.Events.SearchEnd
+    if not searchEndEvent then
+        ns.Log("Auctionator.Shopping.Tab.Events.SearchEnd is nil — Auctionator API may have changed.", 1, 0.3, 0.3)
+        return
+    end
+    Auctionator.EventBus:Register(ns.listener, { searchEndEvent })
     ns.listenerRegistered = true
     ns.runStartMoney = GetMoney()
+    ns.searchGen = (ns.searchGen or 0) + 1
+    local thisGen = ns.searchGen
     ns.state = ns.STATE.SEARCHING
     ns.UpdateUI()
-    ns.Log("Search started: " .. #ns.activeItems .. " items." ..
-        (ns.budget > 0 and ("  Budget: " .. ns.budget .. "g") or ""), 0.8, 0.8, 1)
-    AuctionatorShoppingFrame:DoSearch(ns.BuildSearchStrings())
+    local startedMsg = "Search started: " .. #ns.activeItems .. " items." ..
+        (ns.budget > 0 and ("  Budget: " .. ns.budget .. "g") or "")
+    ns.Log(startedMsg, 0.8, 0.8, 1)
+
+    -- Auctionator's ConvertToSearchString needs item NAMES (not IDs). Names load async via
+    -- the WoW item cache; pre-warm them all, then fire the AH search from the continuation.
+    -- thisGen guards against cancel-and-restart races: Reset bumps ns.searchGen, so any
+    -- old callbacks that fire after a restart compare unequal and drop their results.
+    local pending = #ns.activeItems
+    local names   = {}
+
+    for i, ref in ipairs(ns.activeItems) do
+        local catItem = CATEGORIES[ref.catIdx].items[ref.itemIdx]
+        local itemObj = Item:CreateFromItemID(catItem.id)
+        itemObj:ContinueOnItemLoad(function()
+            if ns.searchGen ~= thisGen then return end
+            names[i]  = itemObj:GetItemName()
+            pending   = pending - 1
+            if pending == 0 then
+                ns.FireAuctionatorSearch(names, thisGen)
+            end
+        end)
+    end
+end
+
+ns.FireAuctionatorSearch = function(names, thisGen)
+    if ns.searchGen ~= thisGen then return end
+    local sbsOk, sbsResult = pcall(ns.BuildSearchStrings, names)
+    if not sbsOk then
+        ns.Log("BuildSearchStrings error: " .. tostring(sbsResult), 1, 0.3, 0.3)
+        ns.Reset()
+        ns.UpdateUI()
+        return
+    end
+    if not AuctionatorShoppingFrame.DoSearch then
+        ns.Log("AuctionatorShoppingFrame:DoSearch is nil — Auctionator API mismatch.", 1, 0.3, 0.3)
+        return
+    end
+    local doOk, doErr = pcall(function() AuctionatorShoppingFrame:DoSearch(sbsResult) end)
+    if not doOk then
+        ns.Log("DoSearch error: " .. tostring(doErr), 1, 0.3, 0.3)
+    end
 end
 
 -- ============================================================
@@ -433,12 +516,20 @@ end
 -- ============================================================
 -- Auctionator EventBus listener
 -- ============================================================
-function ns.listener:ReceiveEvent(eventName)
-    if eventName ~= Auctionator.Shopping.Tab.Events.SearchEnd then return end
+function ns.listener:ReceiveEvent(eventName, results)
+    local expected = Auctionator and Auctionator.Shopping and Auctionator.Shopping.Tab
+        and Auctionator.Shopping.Tab.Events and Auctionator.Shopping.Tab.Events.SearchEnd
+    if eventName ~= expected then return end
     if ns.state ~= ns.STATE.SEARCHING then return end
     ns.listenerRegistered = false
-    Auctionator.EventBus:Unregister(self, { Auctionator.Shopping.Tab.Events.SearchEnd })
-    ns.MapResultRows()
+    Auctionator.EventBus:Unregister(self, { expected })
+    local mapOk, mapErr = pcall(ns.MapResultRows, results)
+    if not mapOk then
+        ns.Log("MapResultRows error: " .. tostring(mapErr), 1, 0.3, 0.3)
+        ns.state = ns.STATE.READY
+        ns.UpdateUI()
+        return
+    end
     local found = 0
     for _ in pairs(ns.resultRows) do found = found + 1 end
     ns.Print("Search complete. " .. found .. "/" .. #ns.activeItems .. " items found in AH.")
