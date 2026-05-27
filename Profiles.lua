@@ -37,6 +37,7 @@ function ns.CreateProfile(name)
     db().profiles[name] = db().profiles[name] or {}
     SnapshotInclusion(db().profiles[name])
     ns.SetActiveProfile(name)
+    ns.Print("Profile \"" .. name .. "\" created.")
 end
 
 function ns.DeleteProfile(name)
@@ -96,6 +97,7 @@ function ns.SaveCurrentProfile()
         db().profiles[ns.currentProfile] = {}
     end
     SnapshotInclusion(db().profiles[ns.currentProfile])
+    ns.Print("Profile \"" .. ns.currentProfile .. "\" saved.")
 end
 
 function ns.SaveProfileAs(newName)
