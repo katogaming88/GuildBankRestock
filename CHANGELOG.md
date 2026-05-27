@@ -4,6 +4,14 @@ All notable changes to GuildBankRestock will be documented here.
 
 ## [Unreleased]
 
+## [0.9.10] - 2026-05-27
+
+### Added
+- **Weapon enchants**: new Weapon section in the Enchants tab with all 6 Midnight weapon enchants (R1 + R2 each): Jan'alai's Precision, Berserker's Rage, Worldsoul Aegis, Flames of the Sin'dorei, Acuity of the Ren'dorei, Arcane Mastery
+
+### Fixed
+- Adding new item sections mid-list no longer corrupts saved settings for items that follow. Previously, inserting the Weapon section between Shoulder and Boots shifted all Boots item indices in SavedVariables -- Boots' saved enabled states mapped onto the new weapon enchant positions, causing them to appear selected on first load. New sections are now appended at the end of the items list
+
 ### Changed
 - **internal:** consolidated per-search-run state wipe (`ns.activeItems` / `ns.boughtIndices` / `ns.skippedIndices` / `ns.resultRows`) into a `ResetSearchState()` helper called by both `ns.Reset` and `ns.StartSearch`. Future search-state fields only need to be remembered in one place. No behavior change
 
