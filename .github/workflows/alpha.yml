@@ -1,0 +1,50 @@
+name: Alpha Build
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version
+        id: version
+        run: echo "name=$(git describe --tags --always)" >> $GITHUB_OUTPUT
+
+      - name: Fetch Ace3 libraries
+        run: bash fetch-libs.sh
+
+      - name: Build release zip
+        run: |
+          cd ..
+          zip -r GuildBankRestock.zip GuildBankRestock \
+            --exclude "GuildBankRestock/.git/*" \
+            --exclude "GuildBankRestock/.github/*" \
+            --exclude "GuildBankRestock/fetch-libs.sh" \
+            --exclude "GuildBankRestock/.gitignore"
+
+      - name: Upload to CurseForge
+        env:
+          CF_API_KEY: ${{ secrets.CF_API_KEY }}
+        run: |
+          GAME_VERSION_ID=$(curl -sf \
+            -H "X-Api-Token: $CF_API_KEY" \
+            "https://wow.curseforge.com/api/game/versions" \
+            | jq '[.[] | select(.gameVersionTypeID == 517)] | sort_by(.id) | last | .id')
+
+          METADATA=$(jq -n \
+            --arg displayName "${{ steps.version.outputs.name }}" \
+            --argjson gv "$GAME_VERSION_ID" \
+            '{changelog: "", changelogType: "markdown", displayName: $displayName, gameVersions: [$gv], releaseType: "alpha"}')
+
+          curl -sf \
+            -H "X-Api-Token: $CF_API_KEY" \
+            -F "metadata=$METADATA" \
+            -F "file=@../GuildBankRestock.zip" \
+            "https://wow.curseforge.com/api/projects/1526978/upload-file"
