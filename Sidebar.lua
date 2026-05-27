@@ -144,7 +144,8 @@ do
     saveBtn:SetPoint("LEFT", sidebarProfileActions, "LEFT", 100, 0)
     saveBtn:SetText("Save")
     saveBtn:SetScript("OnClick", function()
-        if ns.currentProfile then ns.SaveCurrentProfile() end
+        if not ns.currentProfile then return end
+        ns.SaveCurrentProfile()
     end)
 
     -- ── Scan row (shown when context = personal) ──────────────
