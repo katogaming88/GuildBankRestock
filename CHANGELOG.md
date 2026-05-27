@@ -4,6 +4,11 @@ All notable changes to GuildBankRestock will be documented here.
 
 ## [Unreleased]
 
+## [0.9.12] - 2026-05-27
+
+### Added
+- **Run cost summary**: total gold spent is now shown in the end-of-run dialog and printed to chat when the run completes
+
 ## [0.9.11] - 2026-05-27
 
 ### Fixed
