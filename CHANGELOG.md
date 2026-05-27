@@ -4,6 +4,11 @@ All notable changes to GuildBankRestock will be documented here.
 
 ## [Unreleased]
 
+## [0.9.11] - 2026-05-27
+
+### Fixed
+- **Save profile** now saves in-place without a dialog. Previously the Save button opened a "Save profile as:" rename dialog -- clicking it triggered a full profile switch via `SetActiveProfile`, which recalculated `toBuy` and wiped any manual To Buy overrides, making the tab appear to revert. Save now directly snapshots the current item selections into the active profile's inclusion record with no side effects
+
 ## [0.9.10] - 2026-05-27
 
 ### Added

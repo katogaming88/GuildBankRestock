@@ -143,7 +143,10 @@ do
     saveBtn:SetSize(46, 20)
     saveBtn:SetPoint("LEFT", sidebarProfileActions, "LEFT", 100, 0)
     saveBtn:SetText("Save")
-    saveBtn:SetScript("OnClick", function() StaticPopup_Show("GUILDBANKRESTOCK_SAVE_PROFILE") end)
+    saveBtn:SetScript("OnClick", function()
+        if not ns.currentProfile then return end
+        ns.SaveCurrentProfile()
+    end)
 
     -- ── Scan row (shown when context = personal) ──────────────
     sidebarScanRow = CreateFrame("Frame", nil, sidebarPanel)
