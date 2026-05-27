@@ -138,6 +138,22 @@ UpdateUI = function()
                 parts[#parts + 1] = string.format("|cffffaa00%d not found on AH.|r", notFound)
                 logParts[#logParts + 1] = string.format("%d not found on AH.", notFound)
             end
+            local spent = math.max(0, ns.runStartMoney - GetMoney())
+            local spentG = math.floor(spent / 10000)
+            local spentS = math.floor((spent % 10000) / 100)
+            local spentC = spent % 100
+            local spentStr, spentLog
+            if spentG > 0 then
+                spentStr = string.format("|cffd4af37%dg %ds %dc spent|r", spentG, spentS, spentC)
+                spentLog = string.format("%dg %ds %dc spent.", spentG, spentS, spentC)
+            elseif spentS > 0 then
+                spentStr = string.format("|cffd4af37%ds %dc spent|r", spentS, spentC)
+                spentLog = string.format("%ds %dc spent.", spentS, spentC)
+            elseif spentC > 0 then
+                spentStr = string.format("|cffd4af37%dc spent|r", spentC)
+                spentLog = string.format("%dc spent.", spentC)
+            end
+
             local msg, logMsg
             if bought > 0 and skipped == 0 and notFound == 0 then
                 msg, logMsg = "|cff00ff00All items purchased!|r", "All items purchased."
@@ -150,11 +166,14 @@ UpdateUI = function()
             else
                 msg, logMsg = "|cff00ff00Done.|r", "Done."
             end
+            if spentStr then msg = msg .. "\n" .. spentStr end
+            if spentLog then logMsg = logMsg .. " " .. spentLog end
             SetStatusText(msg)
             ShowStatusView(
                 msg,
                 "Close", true,
                 function()
+                    if spentLog then ns.Print(spentLog) end
                     ns.Log(logMsg, 0.4, 1, 0.4)
                     suppressStopMessage = true
                     ns.Reset()
