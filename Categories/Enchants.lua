@@ -56,6 +56,15 @@ table.insert(ns.CATEGORIES, {
         { id = 244020, rank = 1, qty = 1, enabled = true }, -- Enchant Shoulder - Silvermoon's Mending R1
         { id = 244021, rank = 2, qty = 1, enabled = true }, -- Enchant Shoulder - Silvermoon's Mending R2
 
+        -- Boots
+        { header = "Boots" },
+        { id = 243982, rank = 1, qty = 1, enabled = true }, -- Enchant Boots - Shaladrassil's Roots R1
+        { id = 243983, rank = 2, qty = 1, enabled = true }, -- Enchant Boots - Shaladrassil's Roots R2
+        { id = 244008, rank = 1, qty = 1, enabled = true }, -- Enchant Boots - Farstrider's Hunt R1
+        { id = 244009, rank = 2, qty = 1, enabled = true }, -- Enchant Boots - Farstrider's Hunt R2
+        { id = 243952, rank = 1, qty = 1, enabled = true }, -- Enchant Boots - Lynx's Dexterity R1
+        { id = 243953, rank = 2, qty = 1, enabled = true }, -- Enchant Boots - Lynx's Dexterity R2
+
         -- Weapon
         { header = "Weapon" },
         { id = 243970, rank = 1, qty = 1, enabled = true }, -- Enchant Weapon - Jan'alai's Precision R1
@@ -70,14 +79,5 @@ table.insert(ns.CATEGORIES, {
         { id = 244029, rank = 2, qty = 1, enabled = true }, -- Enchant Weapon - Acuity of the Ren'dorei R2
         { id = 244030, rank = 1, qty = 1, enabled = true }, -- Enchant Weapon - Arcane Mastery R1
         { id = 244031, rank = 2, qty = 1, enabled = true }, -- Enchant Weapon - Arcane Mastery R2
-
-        -- Boots
-        { header = "Boots" },
-        { id = 243982, rank = 1, qty = 1, enabled = true }, -- Enchant Boots - Shaladrassil's Roots R1
-        { id = 243983, rank = 2, qty = 1, enabled = true }, -- Enchant Boots - Shaladrassil's Roots R2
-        { id = 244008, rank = 1, qty = 1, enabled = true }, -- Enchant Boots - Farstrider's Hunt R1
-        { id = 244009, rank = 2, qty = 1, enabled = true }, -- Enchant Boots - Farstrider's Hunt R2
-        { id = 243952, rank = 1, qty = 1, enabled = true }, -- Enchant Boots - Lynx's Dexterity R1
-        { id = 243953, rank = 2, qty = 1, enabled = true }, -- Enchant Boots - Lynx's Dexterity R2
     }
 })
