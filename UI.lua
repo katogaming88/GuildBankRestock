@@ -44,33 +44,6 @@ StaticPopupDialogs["GUILDBANKRESTOCK_NEW_PROFILE"] = {
 }
 
 -- ============================================================
--- Static popup: save-as profile
--- ============================================================
-StaticPopupDialogs["GUILDBANKRESTOCK_SAVE_PROFILE"] = {
-    text = "Save profile as:",
-    button1 = "Save",
-    button2 = "Cancel",
-    hasEditBox = true,
-    OnShow = function(self)
-        self.EditBox:SetText(ns.currentProfile or "")
-        self.EditBox:HighlightText()
-    end,
-    OnAccept = function(self)
-        local name = self.EditBox:GetText():match("^%s*(.-)%s*$")
-        if name ~= "" then ns.SaveProfileAs(name) end
-    end,
-    EditBoxOnEnterPressed = function(self)
-        local name = self:GetText():match("^%s*(.-)%s*$")
-        if name ~= "" then ns.SaveProfileAs(name) end
-        self:GetParent():Hide()
-    end,
-    timeout = 0,
-    whileDead = true,
-    hideOnEscape = true,
-    preferredIndex = 3,
-}
-
--- ============================================================
 -- Frame-local state
 -- ============================================================
 local mainFrame            -- assigned below; also exposed as ui.mainFrame

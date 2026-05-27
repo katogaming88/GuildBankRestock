@@ -89,6 +89,15 @@ function ns.SetProfileTarget(catIdx, itemIdx, qty)
     db().profiles[ns.currentProfile][catIdx .. "_" .. itemIdx] = qty > 0 and qty or nil
 end
 
+function ns.SaveCurrentProfile()
+    if not ns.currentProfile then return end
+    if not db().profiles then db().profiles = {} end
+    if not db().profiles[ns.currentProfile] then
+        db().profiles[ns.currentProfile] = {}
+    end
+    SnapshotInclusion(db().profiles[ns.currentProfile])
+end
+
 function ns.SaveProfileAs(newName)
     if not newName or newName == "" then return end
     if not db().profiles then db().profiles = {} end
