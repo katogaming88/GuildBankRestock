@@ -56,6 +56,21 @@ table.insert(ns.CATEGORIES, {
         { id = 244020, rank = 1, qty = 1, enabled = true }, -- Enchant Shoulder - Silvermoon's Mending R1
         { id = 244021, rank = 2, qty = 1, enabled = true }, -- Enchant Shoulder - Silvermoon's Mending R2
 
+        -- Weapon
+        { header = "Weapon" },
+        { id = 243970, rank = 1, qty = 1, enabled = true }, -- Enchant Weapon - Jan'alai's Precision R1
+        { id = 243971, rank = 2, qty = 1, enabled = true }, -- Enchant Weapon - Jan'alai's Precision R2
+        { id = 243972, rank = 1, qty = 1, enabled = true }, -- Enchant Weapon - Berserker's Rage R1
+        { id = 243973, rank = 2, qty = 1, enabled = true }, -- Enchant Weapon - Berserker's Rage R2
+        { id = 243998, rank = 1, qty = 1, enabled = true }, -- Enchant Weapon - Worldsoul Aegis R1
+        { id = 243999, rank = 2, qty = 1, enabled = true }, -- Enchant Weapon - Worldsoul Aegis R2
+        { id = 244026, rank = 1, qty = 1, enabled = true }, -- Enchant Weapon - Flames of the Sin'dorei R1
+        { id = 244027, rank = 2, qty = 1, enabled = true }, -- Enchant Weapon - Flames of the Sin'dorei R2
+        { id = 244028, rank = 1, qty = 1, enabled = true }, -- Enchant Weapon - Acuity of the Ren'dorei R1
+        { id = 244029, rank = 2, qty = 1, enabled = true }, -- Enchant Weapon - Acuity of the Ren'dorei R2
+        { id = 244030, rank = 1, qty = 1, enabled = true }, -- Enchant Weapon - Arcane Mastery R1
+        { id = 244031, rank = 2, qty = 1, enabled = true }, -- Enchant Weapon - Arcane Mastery R2
+
         -- Boots
         { header = "Boots" },
         { id = 243982, rank = 1, qty = 1, enabled = true }, -- Enchant Boots - Shaladrassil's Roots R1
