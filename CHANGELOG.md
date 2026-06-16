@@ -4,6 +4,11 @@ All notable changes to GuildBankRestock will be documented here.
 
 ## [Unreleased]
 
+## [0.9.13] - 2026-06-16
+
+### Changed
+- TOC: added interface version 120007 (patch 12.0.7) to compatibility list
+
 ## [0.9.12] - 2026-05-27
 
 ### Added
